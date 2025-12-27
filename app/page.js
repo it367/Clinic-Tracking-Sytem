@@ -753,34 +753,52 @@ export default function ClinicSystem() {
 
   const uploadFiles = async (recordType, recordId, filesByCategory) => {
     const uploadedFiles = [];
+    console.log('Uploading files for', recordType, recordId, filesByCategory);
 
     for (const [category, fileList] of Object.entries(filesByCategory)) {
       for (const file of fileList) {
-        if (!file.isNew || !file.file) continue;
+        if (!file.isNew || !file.file) {
+          console.log('Skipping file (not new or no file object):', file.name);
+          continue;
+        }
 
-        const fileExt = file.name.split('.').pop();
         const filePath = `${recordType}/${recordId}/${category}/${Date.now()}_${file.name}`;
+        console.log('Uploading to path:', filePath);
 
-        const { data, error } = await supabase.storage
+        const { data: uploadData, error: uploadError } = await supabase.storage
           .from('clinic-documents')
           .upload(filePath, file.file);
 
-        if (!error) {
-          await supabase.from('documents').insert({
-            record_type: recordType,
-            record_id: recordId,
-            file_name: file.name,
-            file_type: file.type,
-            file_size: file.size,
-            category: category,
-            storage_path: filePath,
-            uploaded_by: currentUser.id
-          });
-          uploadedFiles.push({ ...file, storage_path: filePath });
+        if (uploadError) {
+          console.error('Storage upload error:', uploadError);
+          showMessage('error', `Failed to upload ${file.name}: ${uploadError.message}`);
+          continue;
+        }
+
+        console.log('Upload success, saving to documents table...');
+        
+        // Save file metadata to documents table
+        const { data: docData, error: docError } = await supabase.from('documents').insert({
+          record_type: recordType,
+          record_id: recordId,
+          file_name: file.name,
+          file_type: file.type,
+          file_size: file.size,
+          category: category,
+          storage_path: filePath,
+          uploaded_by: currentUser.id
+        }).select().single();
+
+        if (docError) {
+          console.error('Document record error:', docError);
+        } else {
+          console.log('Document saved:', docData);
+          uploadedFiles.push({ ...file, storage_path: filePath, id: docData.id });
         }
       }
     }
 
+    console.log('Total files uploaded:', uploadedFiles.length);
     return uploadedFiles;
   };
 
@@ -1688,63 +1706,95 @@ export default function ClinicSystem() {
               )}
 
               {activeModule === 'billing-inquiry' && (
-                <div className={`bg-white rounded-2xl shadow-lg p-6 border-l-4 ${currentColors?.accent}`}>
-                  <h2 className="font-semibold mb-4 text-gray-800">Billing Inquiry</h2>
-                  <div className="grid grid-cols-2 gap-4">
-                    <InputField label="Patient Name" value={forms['billing-inquiry'].patient_name} onChange={e => updateForm('billing-inquiry', 'patient_name', e.target.value)} />
-                    <InputField label="Chart Number" value={forms['billing-inquiry'].chart_number} onChange={e => updateForm('billing-inquiry', 'chart_number', e.target.value)} />
-                    <InputField label="Date of Service" type="date" value={forms['billing-inquiry'].date_of_service} onChange={e => updateForm('billing-inquiry', 'date_of_service', e.target.value)} />
-                    <InputField label="Amount in Question" prefix="$" value={forms['billing-inquiry'].amount_in_question} onChange={e => updateForm('billing-inquiry', 'amount_in_question', e.target.value)} />
-                    <InputField label="Contact Method" value={forms['billing-inquiry'].best_contact_method} onChange={e => updateForm('billing-inquiry', 'best_contact_method', e.target.value)} options={['Phone', 'Email', 'Text']} />
-                    <InputField label="Contact Time" value={forms['billing-inquiry'].best_contact_time} onChange={e => updateForm('billing-inquiry', 'best_contact_time', e.target.value)} />
-                    <InputField label="Status" value={forms['billing-inquiry'].status} onChange={e => updateForm('billing-inquiry', 'status', e.target.value)} options={['Pending', 'In Progress', 'Resolved']} />
-                    <InputField label="Result" value={forms['billing-inquiry'].result} onChange={e => updateForm('billing-inquiry', 'result', e.target.value)} />
+                <>
+                  <div className={`bg-white rounded-2xl shadow-lg p-6 border-l-4 ${currentColors?.accent}`}>
+                    <h2 className="font-semibold mb-4 text-gray-800">Billing Inquiry</h2>
+                    <div className="grid grid-cols-2 gap-4">
+                      <InputField label="Patient Name" value={forms['billing-inquiry'].patient_name} onChange={e => updateForm('billing-inquiry', 'patient_name', e.target.value)} />
+                      <InputField label="Chart Number" value={forms['billing-inquiry'].chart_number} onChange={e => updateForm('billing-inquiry', 'chart_number', e.target.value)} />
+                      <InputField label="Date of Service" type="date" value={forms['billing-inquiry'].date_of_service} onChange={e => updateForm('billing-inquiry', 'date_of_service', e.target.value)} />
+                      <InputField label="Amount in Question" prefix="$" value={forms['billing-inquiry'].amount_in_question} onChange={e => updateForm('billing-inquiry', 'amount_in_question', e.target.value)} />
+                      <InputField label="Contact Method" value={forms['billing-inquiry'].best_contact_method} onChange={e => updateForm('billing-inquiry', 'best_contact_method', e.target.value)} options={['Phone', 'Email', 'Text']} />
+                      <InputField label="Contact Time" value={forms['billing-inquiry'].best_contact_time} onChange={e => updateForm('billing-inquiry', 'best_contact_time', e.target.value)} />
+                      <InputField label="Status" value={forms['billing-inquiry'].status} onChange={e => updateForm('billing-inquiry', 'status', e.target.value)} options={['Pending', 'In Progress', 'Resolved']} />
+                      <InputField label="Result" value={forms['billing-inquiry'].result} onChange={e => updateForm('billing-inquiry', 'result', e.target.value)} />
+                    </div>
                   </div>
-                </div>
+                  <div className="bg-white rounded-2xl shadow-lg p-6">
+                    <h2 className="font-semibold mb-4 text-gray-800 flex items-center gap-2">
+                      <File className="w-5 h-5 text-blue-500" />Documents
+                    </h2>
+                    <FileUpload label="Supporting Documentation" files={files['billing-inquiry'].documentation} onFilesChange={f => updateFiles('billing-inquiry', 'documentation', f)} onViewFile={setViewingFile} />
+                  </div>
+                </>
               )}
 
               {activeModule === 'bills-payment' && (
-                <div className={`bg-white rounded-2xl shadow-lg p-6 border-l-4 ${currentColors?.accent}`}>
-                  <h2 className="font-semibold mb-4 text-gray-800">Bills Payment</h2>
-                  <div className="grid grid-cols-2 gap-4">
-                    <InputField label="Bill Date" type="date" value={forms['bills-payment'].bill_date} onChange={e => updateForm('bills-payment', 'bill_date', e.target.value)} />
-                    <InputField label="Vendor" value={forms['bills-payment'].vendor} onChange={e => updateForm('bills-payment', 'vendor', e.target.value)} />
-                    <InputField label="Description" value={forms['bills-payment'].description} onChange={e => updateForm('bills-payment', 'description', e.target.value)} />
-                    <InputField label="Amount" prefix="$" value={forms['bills-payment'].amount} onChange={e => updateForm('bills-payment', 'amount', e.target.value)} />
-                    <InputField label="Due Date" type="date" value={forms['bills-payment'].due_date} onChange={e => updateForm('bills-payment', 'due_date', e.target.value)} />
-                    <InputField label="Status" value={forms['bills-payment'].status} onChange={e => updateForm('bills-payment', 'status', e.target.value)} options={['Pending', 'Approved', 'Paid']} />
+                <>
+                  <div className={`bg-white rounded-2xl shadow-lg p-6 border-l-4 ${currentColors?.accent}`}>
+                    <h2 className="font-semibold mb-4 text-gray-800">Bills Payment</h2>
+                    <div className="grid grid-cols-2 gap-4">
+                      <InputField label="Bill Date" type="date" value={forms['bills-payment'].bill_date} onChange={e => updateForm('bills-payment', 'bill_date', e.target.value)} />
+                      <InputField label="Vendor" value={forms['bills-payment'].vendor} onChange={e => updateForm('bills-payment', 'vendor', e.target.value)} />
+                      <InputField label="Description" value={forms['bills-payment'].description} onChange={e => updateForm('bills-payment', 'description', e.target.value)} />
+                      <InputField label="Amount" prefix="$" value={forms['bills-payment'].amount} onChange={e => updateForm('bills-payment', 'amount', e.target.value)} />
+                      <InputField label="Due Date" type="date" value={forms['bills-payment'].due_date} onChange={e => updateForm('bills-payment', 'due_date', e.target.value)} />
+                      <InputField label="Status" value={forms['bills-payment'].status} onChange={e => updateForm('bills-payment', 'status', e.target.value)} options={['Pending', 'Approved', 'Paid']} />
+                    </div>
                   </div>
-                </div>
+                  <div className="bg-white rounded-2xl shadow-lg p-6">
+                    <h2 className="font-semibold mb-4 text-gray-800 flex items-center gap-2">
+                      <File className="w-5 h-5 text-violet-500" />Documents
+                    </h2>
+                    <FileUpload label="Bill / Invoice Documents" files={files['bills-payment'].documentation} onFilesChange={f => updateFiles('bills-payment', 'documentation', f)} onViewFile={setViewingFile} />
+                  </div>
+                </>
               )}
 
               {activeModule === 'order-requests' && (
-                <div className={`bg-white rounded-2xl shadow-lg p-6 border-l-4 ${currentColors?.accent}`}>
-                  <h2 className="font-semibold mb-4 text-gray-800">Order Request</h2>
-                  <div className="grid grid-cols-2 gap-4">
-                    <InputField label="Date Entered" type="date" value={forms['order-requests'].date_entered} onChange={e => updateForm('order-requests', 'date_entered', e.target.value)} />
-                    <InputField label="Vendor" value={forms['order-requests'].vendor} onChange={e => updateForm('order-requests', 'vendor', e.target.value)} />
-                    <InputField label="Invoice Number" value={forms['order-requests'].invoice_number} onChange={e => updateForm('order-requests', 'invoice_number', e.target.value)} />
-                    <InputField label="Invoice Date" type="date" value={forms['order-requests'].invoice_date} onChange={e => updateForm('order-requests', 'invoice_date', e.target.value)} />
-                    <InputField label="Due Date" type="date" value={forms['order-requests'].due_date} onChange={e => updateForm('order-requests', 'due_date', e.target.value)} />
-                    <InputField label="Amount" prefix="$" value={forms['order-requests'].amount} onChange={e => updateForm('order-requests', 'amount', e.target.value)} />
-                    <InputField label="Status" value={forms['order-requests'].status} onChange={e => updateForm('order-requests', 'status', e.target.value)} options={['Pending', 'Approved', 'Paid']} />
-                    <InputField label="Notes" value={forms['order-requests'].notes} onChange={e => updateForm('order-requests', 'notes', e.target.value)} />
+                <>
+                  <div className={`bg-white rounded-2xl shadow-lg p-6 border-l-4 ${currentColors?.accent}`}>
+                    <h2 className="font-semibold mb-4 text-gray-800">Order Request</h2>
+                    <div className="grid grid-cols-2 gap-4">
+                      <InputField label="Date Entered" type="date" value={forms['order-requests'].date_entered} onChange={e => updateForm('order-requests', 'date_entered', e.target.value)} />
+                      <InputField label="Vendor" value={forms['order-requests'].vendor} onChange={e => updateForm('order-requests', 'vendor', e.target.value)} />
+                      <InputField label="Invoice Number" value={forms['order-requests'].invoice_number} onChange={e => updateForm('order-requests', 'invoice_number', e.target.value)} />
+                      <InputField label="Invoice Date" type="date" value={forms['order-requests'].invoice_date} onChange={e => updateForm('order-requests', 'invoice_date', e.target.value)} />
+                      <InputField label="Due Date" type="date" value={forms['order-requests'].due_date} onChange={e => updateForm('order-requests', 'due_date', e.target.value)} />
+                      <InputField label="Amount" prefix="$" value={forms['order-requests'].amount} onChange={e => updateForm('order-requests', 'amount', e.target.value)} />
+                      <InputField label="Status" value={forms['order-requests'].status} onChange={e => updateForm('order-requests', 'status', e.target.value)} options={['Pending', 'Approved', 'Paid']} />
+                      <InputField label="Notes" value={forms['order-requests'].notes} onChange={e => updateForm('order-requests', 'notes', e.target.value)} />
+                    </div>
                   </div>
-                </div>
+                  <div className="bg-white rounded-2xl shadow-lg p-6">
+                    <h2 className="font-semibold mb-4 text-gray-800 flex items-center gap-2">
+                      <File className="w-5 h-5 text-amber-500" />Documents
+                    </h2>
+                    <FileUpload label="Order Invoices / POs" files={files['order-requests'].orderInvoices} onFilesChange={f => updateFiles('order-requests', 'orderInvoices', f)} onViewFile={setViewingFile} />
+                  </div>
+                </>
               )}
 
               {activeModule === 'refund-requests' && (
-                <div className={`bg-white rounded-2xl shadow-lg p-6 border-l-4 ${currentColors?.accent}`}>
-                  <h2 className="font-semibold mb-4 text-gray-800">Refund Request</h2>
-                  <div className="grid grid-cols-2 gap-4">
-                    <InputField label="Patient Name" value={forms['refund-requests'].patient_name} onChange={e => updateForm('refund-requests', 'patient_name', e.target.value)} />
-                    <InputField label="Chart Number" value={forms['refund-requests'].chart_number} onChange={e => updateForm('refund-requests', 'chart_number', e.target.value)} />
-                    <InputField label="Date of Request" type="date" value={forms['refund-requests'].date_of_request} onChange={e => updateForm('refund-requests', 'date_of_request', e.target.value)} />
-                    <InputField label="Type" value={forms['refund-requests'].type} onChange={e => updateForm('refund-requests', 'type', e.target.value)} options={['Refund', 'Credit', 'Adjustment']} />
-                    <InputField label="Amount Requested" prefix="$" value={forms['refund-requests'].amount_requested} onChange={e => updateForm('refund-requests', 'amount_requested', e.target.value)} />
-                    <InputField label="Status" value={forms['refund-requests'].status} onChange={e => updateForm('refund-requests', 'status', e.target.value)} options={['Pending', 'Approved', 'Completed', 'Denied']} />
+                <>
+                  <div className={`bg-white rounded-2xl shadow-lg p-6 border-l-4 ${currentColors?.accent}`}>
+                    <h2 className="font-semibold mb-4 text-gray-800">Refund Request</h2>
+                    <div className="grid grid-cols-2 gap-4">
+                      <InputField label="Patient Name" value={forms['refund-requests'].patient_name} onChange={e => updateForm('refund-requests', 'patient_name', e.target.value)} />
+                      <InputField label="Chart Number" value={forms['refund-requests'].chart_number} onChange={e => updateForm('refund-requests', 'chart_number', e.target.value)} />
+                      <InputField label="Date of Request" type="date" value={forms['refund-requests'].date_of_request} onChange={e => updateForm('refund-requests', 'date_of_request', e.target.value)} />
+                      <InputField label="Type" value={forms['refund-requests'].type} onChange={e => updateForm('refund-requests', 'type', e.target.value)} options={['Refund', 'Credit', 'Adjustment']} />
+                      <InputField label="Amount Requested" prefix="$" value={forms['refund-requests'].amount_requested} onChange={e => updateForm('refund-requests', 'amount_requested', e.target.value)} />
+                      <InputField label="Status" value={forms['refund-requests'].status} onChange={e => updateForm('refund-requests', 'status', e.target.value)} options={['Pending', 'Approved', 'Completed', 'Denied']} />
+                    </div>
                   </div>
-                </div>
+                  <div className="bg-white rounded-2xl shadow-lg p-6">
+                    <h2 className="font-semibold mb-4 text-gray-800 flex items-center gap-2">
+                      <File className="w-5 h-5 text-rose-500" />Documents
+                    </h2>
+                    <FileUpload label="Supporting Documentation" files={files['refund-requests'].documentation} onFilesChange={f => updateFiles('refund-requests', 'documentation', f)} onViewFile={setViewingFile} />
+                  </div>
+                </>
               )}
 
               <button
