@@ -378,38 +378,54 @@ export default function ClinicSystem() {
 
   // ==================== AUTHENTICATION ====================
 
-  const handleLogin = async () => {
-    if (!loginEmail || !loginPassword) {
-      showMessage('error', 'Please enter email and password');
-      return;
-    }
+ const handleLogin = async () => {
+  if (!loginEmail || !loginPassword) {
+    showMessage('error', 'Please enter email and password');
+    return;
+  }
 
-    setLoginLoading(true);
-    
-    const { data: user, error } = await supabase
+  setLoginLoading(true);
+  
+  try {
+    // Step 1: Get user without join
+    const { data: user, error: userError } = await supabase
       .from('users')
-      .select(`*, user_locations(location_id, locations(id, name))`)
+      .select('*')
       .eq('email', loginEmail.toLowerCase())
       .eq('password_hash', loginPassword)
       .eq('is_active', true)
-      .single();
+      .maybeSingle();
 
-    if (error || !user) {
+    if (userError) {
+      console.error('Login error:', userError);
+      showMessage('error', 'Login failed. Please try again.');
+      setLoginLoading(false);
+      return;
+    }
+
+    if (!user) {
       showMessage('error', 'Invalid email or password');
       setLoginLoading(false);
       return;
     }
 
+    // Step 2: Get user locations separately
+    const { data: userLocs } = await supabase
+      .from('user_locations')
+      .select('location_id, locations(id, name)')
+      .eq('user_id', user.id);
+
+    const locationsList = userLocs?.map(ul => ul.locations).filter(Boolean) || [];
+
     // Update last login
     await supabase.from('users').update({ last_login: new Date().toISOString() }).eq('id', user.id);
 
-    const userLocs = user.user_locations?.map(ul => ul.locations) || [];
     setCurrentUser(user);
-    setUserLocations(userLocs);
+    setUserLocations(locationsList);
 
-    // Auto-select location if only one
-    if (userLocs.length === 1) {
-      setSelectedLocation(userLocs[0].name);
+    // Auto-select location if only one (for staff)
+    if (locationsList.length === 1) {
+      setSelectedLocation(locationsList[0].name);
     }
 
     // Load users list if admin
@@ -417,24 +433,13 @@ export default function ClinicSystem() {
       loadUsers();
     }
 
-    setLoginLoading(false);
-  };
+  } catch (err) {
+    console.error('Login exception:', err);
+    showMessage('error', 'An error occurred. Please try again.');
+  }
 
-  const handleLogout = () => {
-    setCurrentUser(null);
-    setUserLocations([]);
-    setSelectedLocation(null);
-    setLoginEmail('');
-    setLoginPassword('');
-    setView('entry');
-    setAdminView('records');
-    setPwdForm({ current: '', new: '', confirm: '' });
-    setChatMessages([{
-      role: 'assistant',
-      content: "👋 Hi! I'm your AI assistant. I can help with:\n\n• Data summaries & reports\n• Weekly comparisons\n• Location analytics\n• IT request status\n\nWhat would you like to know?"
-    }]);
-    setModuleData({});
-  };
+  setLoginLoading(false);
+};
 
   // ==================== USER MANAGEMENT ====================
 
