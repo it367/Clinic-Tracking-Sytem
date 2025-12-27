@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
-import { DollarSign, FileText, Building2, Bot, Send, Loader2, LogOut, User, Upload, X, File, Shield, Receipt, CreditCard, Package, RefreshCw, Monitor, Menu, Eye, FolderOpen, Edit3, Users, Plus, Trash2, Lock, Download, Settings, MessageCircle, Sparkles, AlertCircle } from 'lucide-react';
+import { DollarSign, FileText, Building2, Bot, Send, Loader2, LogOut, User, Upload, X, File, Shield, Receipt, CreditCard, Package, RefreshCw, Monitor, Menu, Eye, EyeOff, FolderOpen, Edit3, Users, Plus, Trash2, Lock, Download, Settings, MessageCircle, Sparkles, AlertCircle, Maximize2, Minimize2, Headphones } from 'lucide-react';
 
 const MODULES = [
   { id: 'daily-recon', name: 'Daily Recon', icon: DollarSign, color: 'emerald', table: 'daily_recon' },
@@ -9,8 +9,13 @@ const MODULES = [
   { id: 'bills-payment', name: 'Bills Payment', icon: CreditCard, color: 'violet', table: 'bills_payment' },
   { id: 'order-requests', name: 'Order Requests', icon: Package, color: 'amber', table: 'order_requests' },
   { id: 'refund-requests', name: 'Refund Requests', icon: RefreshCw, color: 'rose', table: 'refund_requests' },
+];
+
+const SUPPORT_MODULES = [
   { id: 'it-requests', name: 'IT Requests', icon: Monitor, color: 'cyan', table: 'it_requests' },
 ];
+
+const ALL_MODULES = [...MODULES, ...SUPPORT_MODULES];
 
 const MODULE_COLORS = {
   'daily-recon': { bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-700', accent: 'bg-emerald-500', light: 'bg-emerald-100' },
@@ -24,24 +29,42 @@ const MODULE_COLORS = {
 const IT_STATUSES = ['Open', 'In Progress', 'Resolved', 'Closed'];
 const DATE_RANGES = ['This Week', 'Last 2 Weeks', 'This Month', 'Last Month', 'This Quarter', 'This Year', 'Custom'];
 
-// Helper: Check if record can be edited (before Friday 11:59 PM HST)
 function canEditRecord(createdAt) {
   const now = new Date();
   const hawaiiNow = new Date(now.toLocaleString('en-US', { timeZone: 'Pacific/Honolulu' }));
   const recordDate = new Date(createdAt);
   const recordHawaii = new Date(recordDate.toLocaleString('en-US', { timeZone: 'Pacific/Honolulu' }));
-  
-  // Get Friday of the record's week
   const dayOfWeek = recordHawaii.getDay();
   const daysUntilFriday = (5 - dayOfWeek + 7) % 7;
   const friday = new Date(recordHawaii);
   friday.setDate(recordHawaii.getDate() + daysUntilFriday);
   friday.setHours(23, 59, 59, 999);
-  
   return hawaiiNow <= friday;
 }
 
-function InputField({ label, value, onChange, type = 'text', placeholder = '', prefix, options, large, disabled }) {
+function PasswordField({ label, value, onChange, placeholder = '', disabled }) {
+  const [show, setShow] = useState(false);
+  return (
+    <div className="flex flex-col">
+      <label className="text-xs font-medium text-gray-600 mb-1.5">{label}</label>
+      <div className={`flex items-center border-2 border-gray-200 rounded-xl bg-white transition-all hover:border-gray-300 focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100 ${disabled ? 'bg-gray-100' : ''}`}>
+        <input
+          type={show ? 'text' : 'password'}
+          value={value}
+          onChange={onChange}
+          disabled={disabled}
+          className="w-full p-2.5 rounded-xl outline-none bg-transparent disabled:cursor-not-allowed"
+          placeholder={placeholder}
+        />
+        <button type="button" onClick={() => setShow(!show)} className="px-3 text-gray-400 hover:text-gray-600">
+          {show ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function InputField({ label, value, onChange, type = 'text', placeholder = '', prefix, options, large, disabled, isNumber }) {
   if (options) {
     return (
       <div className="flex flex-col">
@@ -61,12 +84,32 @@ function InputField({ label, value, onChange, type = 'text', placeholder = '', p
       </div>
     );
   }
+
+  const handleNumberInput = (e) => {
+    const val = e.target.value;
+    if (isNumber || prefix === '$') {
+      if (val === '' || /^\d*\.?\d*$/.test(val)) {
+        onChange(e);
+      }
+    } else {
+      onChange(e);
+    }
+  };
+
   return (
     <div className="flex flex-col">
       <label className="text-xs font-medium text-gray-600 mb-1.5">{label}</label>
       <div className={`flex items-center border-2 border-gray-200 rounded-xl bg-white transition-all hover:border-gray-300 focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100 ${disabled ? 'bg-gray-100' : ''}`}>
         {prefix && <span className="pl-3 text-gray-400 font-medium">{prefix}</span>}
-        <input type={type} value={value} onChange={onChange} disabled={disabled} className="w-full p-2.5 rounded-xl outline-none bg-transparent disabled:cursor-not-allowed" placeholder={placeholder} />
+        <input
+          type={type}
+          value={value}
+          onChange={handleNumberInput}
+          disabled={disabled}
+          className="w-full p-2.5 rounded-xl outline-none bg-transparent disabled:cursor-not-allowed"
+          placeholder={placeholder}
+          inputMode={(isNumber || prefix === '$') ? 'decimal' : undefined}
+        />
       </div>
     </div>
   );
@@ -162,6 +205,7 @@ function StatusBadge({ status }) {
 
 function FloatingChat({ messages, input, setInput, onSend, loading, userRole }) {
   const [isOpen, setIsOpen] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
   const messagesEndRef = useRef(null);
   
   useEffect(() => {
@@ -169,6 +213,10 @@ function FloatingChat({ messages, input, setInput, onSend, loading, userRole }) 
   }, [messages]);
 
   const isAdmin = userRole === 'super_admin' || userRole === 'finance_admin';
+
+  const chatSize = isExpanded 
+    ? 'w-[600px] h-[700px]' 
+    : 'w-96 h-[500px]';
 
   return (
     <>
@@ -185,16 +233,25 @@ function FloatingChat({ messages, input, setInput, onSend, loading, userRole }) 
       </button>
 
       {isOpen && (
-        <div className="fixed bottom-24 right-6 z-50 w-96 h-[500px] bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-gray-200">
+        <div className={`fixed bottom-24 right-6 z-50 ${chatSize} bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-gray-200 transition-all duration-300`}>
           <div className={`p-4 text-white ${isAdmin ? 'bg-gradient-to-r from-purple-600 to-indigo-600' : 'bg-gradient-to-r from-blue-600 to-indigo-600'}`}>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
-                <Bot className="w-5 h-5" />
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
+                  <Bot className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-semibold">AI Assistant</h3>
+                  <p className="text-xs text-white/80">Powered by Claude</p>
+                </div>
               </div>
-              <div>
-                <h3 className="font-semibold">AI Assistant</h3>
-                <p className="text-xs text-white/80">Powered by Claude</p>
-              </div>
+              <button
+                onClick={() => setIsExpanded(!isExpanded)}
+                className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+                title={isExpanded ? 'Compact view' : 'Expanded view'}
+              >
+                {isExpanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+              </button>
             </div>
           </div>
 
@@ -246,15 +303,14 @@ function FloatingChat({ messages, input, setInput, onSend, loading, userRole }) 
 }
 
 export default function ClinicSystem() {
-  // Auth state
   const [currentUser, setCurrentUser] = useState(null);
   const [userLocations, setUserLocations] = useState([]);
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
   const [selectedLocation, setSelectedLocation] = useState(null);
+  const [showLoginPwd, setShowLoginPwd] = useState(false);
 
-  // Data state
   const [locations, setLocations] = useState([]);
   const [users, setUsers] = useState([]);
   const [activeModule, setActiveModule] = useState('daily-recon');
@@ -269,21 +325,18 @@ export default function ClinicSystem() {
   const [adminLocation, setAdminLocation] = useState('all');
   const [editingStatus, setEditingStatus] = useState(null);
   const [editingEntry, setEditingEntry] = useState(null);
+  const [documents, setDocuments] = useState([]);
 
-  // User management
   const [showAddUser, setShowAddUser] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
   const [newUser, setNewUser] = useState({ name: '', email: '', password: '', role: 'staff', locations: [] });
 
-  // Password change
   const [pwdForm, setPwdForm] = useState({ current: '', new: '', confirm: '' });
 
-  // Export
   const [exportModule, setExportModule] = useState('daily-recon');
   const [exportLocation, setExportLocation] = useState('all');
   const [exportRange, setExportRange] = useState('This Month');
 
-  // AI Chat
   const [chatMessages, setChatMessages] = useState([{
     role: 'assistant',
     content: "👋 Hi! I'm your AI assistant. I can help with:\n\n• Data summaries & reports\n• Weekly comparisons\n• Location analytics\n• IT request status\n\nWhat would you like to know?"
@@ -293,7 +346,6 @@ export default function ClinicSystem() {
 
   const today = new Date().toISOString().split('T')[0];
 
-  // Form states for each module
   const [forms, setForms] = useState({
     'daily-recon': { recon_date: today, cash: '', credit_card: '', checks_otc: '', insurance_checks: '', care_credit: '', vcc: '', efts: '', deposit_cash: '', deposit_credit_card: '', deposit_checks: '', deposit_insurance: '', deposit_care_credit: '', deposit_vcc: '', notes: '' },
     'billing-inquiry': { patient_name: '', chart_number: '', date_of_service: '', amount_in_question: '', best_contact_method: '', best_contact_time: '', reviewed_by: '', initials: '', status: 'Pending', result: '' },
@@ -312,12 +364,8 @@ export default function ClinicSystem() {
     'it-requests': { documentation: [] }
   });
 
-  // Load locations on mount
-  useEffect(() => {
-    loadLocations();
-  }, []);
+  useEffect(() => { loadLocations(); }, []);
 
-  // Load data when user logs in or location changes
   useEffect(() => {
     if (currentUser && (selectedLocation || isAdmin)) {
       loadModuleData(activeModule);
@@ -331,8 +379,6 @@ export default function ClinicSystem() {
     setMessage({ type, text });
     setTimeout(() => setMessage({ type: '', text: '' }), 4000);
   };
-
-  // ==================== DATA LOADING ====================
 
   const loadLocations = async () => {
     const { data, error } = await supabase.from('locations').select('*').eq('is_active', true).order('name');
@@ -353,14 +399,22 @@ export default function ClinicSystem() {
     }
   };
 
+  const loadDocuments = async () => {
+    const { data, error } = await supabase
+      .from('documents')
+      .select('*, uploader:uploaded_by(name)')
+      .order('created_at', { ascending: false })
+      .limit(200);
+    if (data) setDocuments(data);
+  };
+
   const loadModuleData = async (moduleId) => {
     setLoading(true);
-    const module = MODULES.find(m => m.id === moduleId);
+    const module = ALL_MODULES.find(m => m.id === moduleId);
     if (!module) return;
 
     let query = supabase.from(module.table).select('*, locations(name), creator:created_by(name), updater:updated_by(name)').order('created_at', { ascending: false });
 
-    // Filter by location for staff
     if (!isAdmin && selectedLocation) {
       const loc = locations.find(l => l.name === selectedLocation);
       if (loc) query = query.eq('location_id', loc.id);
@@ -376,8 +430,6 @@ export default function ClinicSystem() {
     setLoading(false);
   };
 
-  // ==================== AUTHENTICATION ====================
-
   const handleLogin = async () => {
     if (!loginEmail || !loginPassword) {
       showMessage('error', 'Please enter email and password');
@@ -387,7 +439,6 @@ export default function ClinicSystem() {
     setLoginLoading(true);
     
     try {
-      // Step 1: Get user without join
       const { data: user, error: userError } = await supabase
         .from('users')
         .select('*')
@@ -409,7 +460,6 @@ export default function ClinicSystem() {
         return;
       }
 
-      // Step 2: Get user locations separately
       const { data: userLocs } = await supabase
         .from('user_locations')
         .select('location_id, locations(id, name)')
@@ -417,18 +467,15 @@ export default function ClinicSystem() {
 
       const locationsList = userLocs?.map(ul => ul.locations).filter(Boolean) || [];
 
-      // Update last login
       await supabase.from('users').update({ last_login: new Date().toISOString() }).eq('id', user.id);
 
       setCurrentUser(user);
       setUserLocations(locationsList);
 
-      // Auto-select location if only one (for staff)
       if (locationsList.length === 1) {
         setSelectedLocation(locationsList[0].name);
       }
 
-      // Load users list if admin
       if (user.role === 'super_admin' || user.role === 'finance_admin') {
         loadUsers();
       }
@@ -457,15 +504,12 @@ export default function ClinicSystem() {
     setModuleData({});
   };
 
-  // ==================== USER MANAGEMENT ====================
-
   const addUser = async () => {
     if (!newUser.name || !newUser.email || !newUser.password) {
       showMessage('error', 'Please fill all required fields');
       return;
     }
 
-    // Create user
     const { data: createdUser, error } = await supabase
       .from('users')
       .insert({
@@ -483,8 +527,7 @@ export default function ClinicSystem() {
       return;
     }
 
-    // Assign locations
-    if (newUser.locations.length > 0) {
+    if (newUser.role === 'staff' && newUser.locations.length > 0) {
       const locationAssignments = newUser.locations.map(locId => ({
         user_id: createdUser.id,
         location_id: locId,
@@ -523,9 +566,8 @@ export default function ClinicSystem() {
       return;
     }
 
-    // Update locations
     await supabase.from('user_locations').delete().eq('user_id', editingUser.id);
-    if (editingUser.locationIds?.length > 0) {
+    if (editingUser.role === 'staff' && editingUser.locationIds?.length > 0) {
       const locationAssignments = editingUser.locationIds.map(locId => ({
         user_id: editingUser.id,
         location_id: locId,
@@ -559,8 +601,6 @@ export default function ClinicSystem() {
     }
   };
 
-  // ==================== PASSWORD CHANGE ====================
-
   const changePassword = async () => {
     if (pwdForm.current !== currentUser.password_hash) {
       showMessage('error', 'Current password is incorrect');
@@ -590,8 +630,6 @@ export default function ClinicSystem() {
     showMessage('success', '✓ Password changed successfully!');
   };
 
-  // ==================== FORM HANDLING ====================
-
   const updateForm = (module, field, value) => {
     setForms(prev => ({ ...prev, [module]: { ...prev[module], [field]: value } }));
   };
@@ -599,8 +637,6 @@ export default function ClinicSystem() {
   const updateFiles = (module, field, newFiles) => {
     setFiles(prev => ({ ...prev, [module]: { ...prev[module], [field]: newFiles } }));
   };
-
-  // ==================== FILE UPLOAD ====================
 
   const uploadFiles = async (recordType, recordId, filesByCategory) => {
     const uploadedFiles = [];
@@ -617,7 +653,6 @@ export default function ClinicSystem() {
           .upload(filePath, file.file);
 
         if (!error) {
-          // Save file metadata to documents table
           await supabase.from('documents').insert({
             record_type: recordType,
             record_id: recordId,
@@ -636,11 +671,9 @@ export default function ClinicSystem() {
     return uploadedFiles;
   };
 
-  // ==================== SAVE ENTRY ====================
-
   const saveEntry = async (moduleId) => {
     setSaving(true);
-    const module = MODULES.find(m => m.id === moduleId);
+    const module = ALL_MODULES.find(m => m.id === moduleId);
     const form = forms[moduleId];
     const loc = locations.find(l => l.name === selectedLocation);
 
@@ -650,7 +683,6 @@ export default function ClinicSystem() {
       return;
     }
 
-    // Prepare data based on module
     let entryData = { location_id: loc.id, created_by: currentUser.id, updated_by: currentUser.id };
 
     if (moduleId === 'daily-recon') {
@@ -753,12 +785,10 @@ export default function ClinicSystem() {
       return;
     }
 
-    // Upload files
     await uploadFiles(moduleId, newEntry.id, files[moduleId]);
 
     showMessage('success', '✓ Entry saved successfully!');
 
-    // Reset form
     const resetForm = { ...forms[moduleId] };
     Object.keys(resetForm).forEach(k => {
       if (!k.includes('date')) resetForm[k] = '';
@@ -773,10 +803,8 @@ export default function ClinicSystem() {
     setSaving(false);
   };
 
-  // ==================== UPDATE STATUS (Admin) ====================
-
   const updateEntryStatus = async (moduleId, entryId, newStatus, additionalFields = {}) => {
-    const module = MODULES.find(m => m.id === moduleId);
+    const module = ALL_MODULES.find(m => m.id === moduleId);
 
     const updateData = {
       status: newStatus,
@@ -804,10 +832,8 @@ export default function ClinicSystem() {
     loadModuleData(moduleId);
   };
 
-  // ==================== EXPORT ====================
-
   const exportToCSV = async () => {
-    const module = MODULES.find(m => m.id === exportModule);
+    const module = ALL_MODULES.find(m => m.id === exportModule);
     let query = supabase.from(module.table).select('*, locations(name)');
 
     if (exportLocation !== 'all') {
@@ -822,7 +848,6 @@ export default function ClinicSystem() {
       return;
     }
 
-    // Convert to CSV
     const headers = Object.keys(data[0]).filter(k => k !== 'locations' && k !== 'location_id');
     headers.push('location');
 
@@ -853,8 +878,6 @@ export default function ClinicSystem() {
     showMessage('success', '✓ Export complete!');
   };
 
-  // ==================== AI CHAT ====================
-
   const askAI = async () => {
     if (!chatInput.trim()) return;
 
@@ -863,10 +886,9 @@ export default function ClinicSystem() {
     setChatInput('');
     setAiLoading(true);
 
-    // Build data summary
     let dataSummary = '\n📊 SYSTEM OVERVIEW:\n';
     
-    for (const mod of MODULES) {
+    for (const mod of ALL_MODULES) {
       const data = moduleData[mod.id] || [];
       if (data.length > 0) {
         dataSummary += `\n${mod.name}: ${data.length} records`;
@@ -893,14 +915,16 @@ export default function ClinicSystem() {
     setAiLoading(false);
   };
 
-  // ==================== RENDER HELPERS ====================
-
   const getModuleEntries = () => moduleData[activeModule] || [];
   const currentColors = MODULE_COLORS[activeModule];
-  const currentModule = MODULES.find(m => m.id === activeModule);
+  const currentModule = ALL_MODULES.find(m => m.id === activeModule);
 
-  // ==================== LOGIN SCREEN ====================
+  const getModuleName = (moduleId) => {
+    const mod = ALL_MODULES.find(m => m.id === moduleId);
+    return mod?.name || moduleId;
+  };
 
+  // LOGIN SCREEN
   if (!currentUser) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center p-4">
@@ -933,14 +957,19 @@ export default function ClinicSystem() {
             </div>
             <div>
               <label className="text-sm font-medium text-gray-700 mb-1.5 block">Password</label>
-              <input
-                type="password"
-                value={loginPassword}
-                onChange={e => setLoginPassword(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleLogin()}
-                className="w-full p-3.5 border-2 border-gray-200 rounded-xl outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100 transition-all"
-                placeholder="Enter password"
-              />
+              <div className="flex items-center border-2 border-gray-200 rounded-xl bg-white transition-all hover:border-gray-300 focus-within:border-blue-400 focus-within:ring-4 focus-within:ring-blue-100">
+                <input
+                  type={showLoginPwd ? 'text' : 'password'}
+                  value={loginPassword}
+                  onChange={e => setLoginPassword(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleLogin()}
+                  className="w-full p-3.5 rounded-xl outline-none bg-transparent"
+                  placeholder="Enter password"
+                />
+                <button type="button" onClick={() => setShowLoginPwd(!showLoginPwd)} className="px-4 text-gray-400 hover:text-gray-600">
+                  {showLoginPwd ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                </button>
+              </div>
             </div>
             <button
               onClick={handleLogin}
@@ -956,8 +985,7 @@ export default function ClinicSystem() {
     );
   }
 
-  // ==================== LOCATION SELECTION ====================
-
+  // LOCATION SELECTION
   if (!isAdmin && !selectedLocation && userLocations.length > 1) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center p-4">
@@ -991,8 +1019,7 @@ export default function ClinicSystem() {
     );
   }
 
-  // ==================== MAIN DASHBOARD ====================
-
+  // MAIN DASHBOARD
   const entries = getModuleEntries();
 
   return (
@@ -1016,7 +1043,6 @@ export default function ClinicSystem() {
           </div>
         </div>
 
-        {/* Location Filter */}
         {isAdmin && (
           <div className="p-4 border-b bg-purple-50">
             <label className="text-xs font-medium text-purple-700 mb-1.5 block">Filter by Location</label>
@@ -1037,7 +1063,7 @@ export default function ClinicSystem() {
         )}
 
         {/* Navigation */}
-        <nav className="p-4 space-y-1.5">
+        <nav className="p-4 space-y-1.5 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 280px)' }}>
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3 px-3">Modules</p>
           {MODULES.map(m => {
             const colors = MODULE_COLORS[m.id];
@@ -1057,13 +1083,35 @@ export default function ClinicSystem() {
           })}
 
           <div className="border-t my-4"></div>
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3 px-3">Management</p>
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3 px-3">Support</p>
+          {SUPPORT_MODULES.map(m => {
+            const colors = MODULE_COLORS[m.id];
+            const isActive = activeModule === m.id && adminView !== 'users' && adminView !== 'export' && adminView !== 'settings' && view !== 'settings';
+            return (
+              <button
+                key={m.id}
+                onClick={() => { setActiveModule(m.id); setAdminView('records'); setView('entry'); setSidebarOpen(false); }}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all ${isActive ? `${colors.bg} ${colors.text} ${colors.border} border-2` : 'text-gray-600 hover:bg-gray-50'}`}
+              >
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${isActive ? colors.light : 'bg-gray-100'}`}>
+                  <m.icon className={`w-4 h-4 ${isActive ? colors.text : 'text-gray-500'}`} />
+                </div>
+                <span className="text-sm font-medium">{m.name}</span>
+              </button>
+            );
+          })}
 
           {isAdmin && (
             <>
+              <div className="border-t my-4"></div>
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3 px-3">Management</p>
               <button onClick={() => { setAdminView('users'); loadUsers(); setSidebarOpen(false); }} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all ${adminView === 'users' ? 'bg-purple-50 text-purple-700 border-2 border-purple-200' : 'text-gray-600 hover:bg-gray-50'}`}>
                 <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${adminView === 'users' ? 'bg-purple-100' : 'bg-gray-100'}`}><Users className="w-4 h-4" /></div>
                 <span className="text-sm font-medium">Users</span>
+              </button>
+              <button onClick={() => { setAdminView('documents'); loadDocuments(); setSidebarOpen(false); }} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all ${adminView === 'documents' ? 'bg-purple-50 text-purple-700 border-2 border-purple-200' : 'text-gray-600 hover:bg-gray-50'}`}>
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${adminView === 'documents' ? 'bg-purple-100' : 'bg-gray-100'}`}><FolderOpen className="w-4 h-4" /></div>
+                <span className="text-sm font-medium">Documents</span>
               </button>
               <button onClick={() => { setAdminView('export'); setSidebarOpen(false); }} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all ${adminView === 'export' ? 'bg-purple-50 text-purple-700 border-2 border-purple-200' : 'text-gray-600 hover:bg-gray-50'}`}>
                 <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${adminView === 'export' ? 'bg-purple-100' : 'bg-gray-100'}`}><Download className="w-4 h-4" /></div>
@@ -1095,7 +1143,7 @@ export default function ClinicSystem() {
               <button onClick={() => setSidebarOpen(!sidebarOpen)} className="lg:hidden p-2 hover:bg-gray-100 rounded-xl"><Menu className="w-5 h-5" /></button>
               <div>
                 <h1 className="font-bold text-gray-800 text-lg">
-                  {isAdmin ? (adminView === 'users' ? 'User Management' : adminView === 'export' ? 'Export Data' : adminView === 'settings' ? 'Settings' : currentModule?.name) : (view === 'settings' ? 'Settings' : currentModule?.name)}
+                  {isAdmin ? (adminView === 'users' ? 'User Management' : adminView === 'export' ? 'Export Data' : adminView === 'documents' ? 'All Documents' : adminView === 'settings' ? 'Settings' : currentModule?.name) : (view === 'settings' ? 'Settings' : currentModule?.name)}
                 </h1>
                 <p className="text-sm text-gray-500">{isAdmin ? (adminLocation === 'all' ? 'All Locations' : adminLocation) : selectedLocation}</p>
               </div>
@@ -1105,12 +1153,10 @@ export default function ClinicSystem() {
 
           {/* Tabs */}
           <div className="flex gap-2 px-4 pb-3 overflow-x-auto">
-            {isAdmin && adminView !== 'users' && adminView !== 'export' && adminView !== 'settings' ? (
-              [{ id: 'records', label: 'Records', icon: FileText }, { id: 'documents', label: 'Documents', icon: FolderOpen }].map(tab => (
-                <button key={tab.id} onClick={() => setAdminView(tab.id)} className={`px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap flex items-center gap-2 transition-all ${adminView === tab.id ? `${currentColors?.accent} text-white shadow-lg` : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
-                  <tab.icon className="w-4 h-4" />{tab.label}
-                </button>
-              ))
+            {isAdmin && adminView === 'records' ? (
+              <button className={`px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap flex items-center gap-2 transition-all ${currentColors?.accent} text-white shadow-lg`}>
+                <FileText className="w-4 h-4" />Records
+              </button>
             ) : !isAdmin && view !== 'settings' ? (
               [{ id: 'entry', label: '+ New Entry' }, { id: 'history', label: 'History' }].map(tab => (
                 <button key={tab.id} onClick={() => setView(tab.id)} className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${view === tab.id ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>{tab.label}</button>
@@ -1119,7 +1165,6 @@ export default function ClinicSystem() {
           </div>
         </header>
 
-        {/* Messages */}
         {message.text && (
           <div className={`mx-4 mt-4 p-4 rounded-xl text-center font-medium shadow-sm flex items-center justify-center gap-2 ${message.type === 'error' ? 'bg-red-50 border border-red-200 text-red-700' : 'bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 text-emerald-700'}`}>
             {message.type === 'error' ? <AlertCircle className="w-4 h-4" /> : null}
@@ -1138,30 +1183,31 @@ export default function ClinicSystem() {
                 </button>
               </div>
 
-              {/* Add/Edit User Form */}
               {(showAddUser || editingUser) && (
                 <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
                   <h3 className="font-semibold mb-4 text-gray-800">{editingUser ? 'Edit User' : 'Add New User'}</h3>
                   <div className="grid grid-cols-2 gap-4">
                     <InputField label="Name *" value={editingUser ? editingUser.name : newUser.name} onChange={e => editingUser ? setEditingUser({...editingUser, name: e.target.value}) : setNewUser({...newUser, name: e.target.value})} />
                     <InputField label="Email *" value={editingUser ? editingUser.email : newUser.email} onChange={e => editingUser ? setEditingUser({...editingUser, email: e.target.value}) : setNewUser({...newUser, email: e.target.value})} />
-                    <InputField label={editingUser ? "New Password" : "Password *"} type="password" value={editingUser ? (editingUser.newPassword || '') : newUser.password} onChange={e => editingUser ? setEditingUser({...editingUser, newPassword: e.target.value}) : setNewUser({...newUser, password: e.target.value})} placeholder={editingUser ? "Leave blank to keep current" : ""} />
+                    <PasswordField label={editingUser ? "New Password" : "Password *"} value={editingUser ? (editingUser.newPassword || '') : newUser.password} onChange={e => editingUser ? setEditingUser({...editingUser, newPassword: e.target.value}) : setNewUser({...newUser, password: e.target.value})} placeholder={editingUser ? "Leave blank to keep current" : ""} />
                     <InputField label="Role" value={editingUser ? editingUser.role : newUser.role} onChange={e => editingUser ? setEditingUser({...editingUser, role: e.target.value}) : setNewUser({...newUser, role: e.target.value})} options={isSuperAdmin ? ['staff', 'finance_admin', 'super_admin'] : ['staff', 'finance_admin']} />
                   </div>
-                  <div className="mt-4">
-                    <label className="text-xs font-medium text-gray-600 mb-2 block">Assigned Locations</label>
-                    <div className="flex flex-wrap gap-2">
-                      {locations.map(loc => (
-                        <button
-                          key={loc.id}
-                          onClick={() => toggleUserLocation(loc.id, !!editingUser)}
-                          className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${(editingUser ? editingUser.locationIds : newUser.locations)?.includes(loc.id) ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-md' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-                        >
-                          {loc.name}
-                        </button>
-                      ))}
+                  {((editingUser ? editingUser.role : newUser.role) === 'staff') && (
+                    <div className="mt-4">
+                      <label className="text-xs font-medium text-gray-600 mb-2 block">Assigned Locations</label>
+                      <div className="flex flex-wrap gap-2">
+                        {locations.map(loc => (
+                          <button
+                            key={loc.id}
+                            onClick={() => toggleUserLocation(loc.id, !!editingUser)}
+                            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${(editingUser ? editingUser.locationIds : newUser.locations)?.includes(loc.id) ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-md' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                          >
+                            {loc.name}
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                  </div>
+                  )}
                   <div className="flex gap-2 mt-5">
                     <button onClick={editingUser ? updateUser : addUser} className="flex-1 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-xl font-medium shadow-lg hover:shadow-xl transition-all">
                       {editingUser ? 'Update' : 'Add'} User
@@ -1171,10 +1217,9 @@ export default function ClinicSystem() {
                 </div>
               )}
 
-              {/* Users List */}
               <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
                 <div className="divide-y">
-                  {users.filter(u => u.is_active !== false).map(u => (
+                  {users.map(u => (
                     <div key={u.id} className="p-4 flex items-center justify-between hover:bg-gray-50 transition-colors">
                       <div className="flex items-center gap-3">
                         <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white font-semibold ${u.role === 'super_admin' ? 'bg-gradient-to-br from-rose-500 to-pink-500' : u.role === 'finance_admin' ? 'bg-gradient-to-br from-purple-500 to-indigo-500' : 'bg-gradient-to-br from-blue-500 to-indigo-500'}`}>
@@ -1183,11 +1228,16 @@ export default function ClinicSystem() {
                         <div>
                           <p className="font-medium text-gray-800">{u.name}</p>
                           <p className="text-sm text-gray-500">{u.email} • <span className="capitalize">{u.role?.replace('_', ' ')}</span></p>
-                          <div className="flex flex-wrap gap-1 mt-1">
-                            {u.locations?.map(loc => (
-                              <span key={loc.id} className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-md text-xs font-medium">{loc.name}</span>
-                            ))}
-                          </div>
+                          {u.role === 'staff' && (
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {u.locations?.map(loc => (
+                                <span key={loc.id} className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-md text-xs font-medium">{loc.name}</span>
+                              ))}
+                            </div>
+                          )}
+                          {(u.role === 'finance_admin' || u.role === 'super_admin') && (
+                            <span className="text-xs text-purple-600 font-medium">All locations access</span>
+                          )}
                         </div>
                       </div>
                       {u.id !== currentUser.id && (
@@ -1210,6 +1260,54 @@ export default function ClinicSystem() {
             </div>
           )}
 
+          {/* ADMIN: Documents */}
+          {isAdmin && adminView === 'documents' && (
+            <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-indigo-500 rounded-xl flex items-center justify-center">
+                  <FolderOpen className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <h2 className="font-semibold text-gray-800">All Uploaded Documents</h2>
+                  <p className="text-sm text-gray-500">{documents.length} files</p>
+                </div>
+              </div>
+              {documents.length === 0 ? (
+                <p className="text-gray-500 text-center py-8">No documents uploaded yet</p>
+              ) : (
+                <div className="space-y-2">
+                  {documents.map(doc => (
+                    <div key={doc.id} className="p-4 rounded-xl border border-gray-200 hover:bg-gray-50 transition-colors">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                            <File className="w-5 h-5 text-blue-600" />
+                          </div>
+                          <div>
+                            <p className="font-medium text-gray-800">{doc.file_name}</p>
+                            <div className="flex items-center gap-2 text-xs text-gray-500">
+                              <span className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded-md font-medium">{getModuleName(doc.record_type)}</span>
+                              <span>•</span>
+                              <span>ID: {doc.record_id}</span>
+                              <span>•</span>
+                              <span>{doc.category}</span>
+                              <span>•</span>
+                              <span>{new Date(doc.created_at).toLocaleDateString()}</span>
+                            </div>
+                            {doc.uploader && <p className="text-xs text-gray-400 mt-1">Uploaded by: {doc.uploader.name}</p>}
+                          </div>
+                        </div>
+                        <div className="text-sm text-gray-500">
+                          {(doc.file_size / 1024).toFixed(1)} KB
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* ADMIN: Export */}
           {isAdmin && adminView === 'export' && (
             <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
@@ -1226,7 +1324,7 @@ export default function ClinicSystem() {
                 <div>
                   <label className="text-xs font-medium text-gray-600 mb-1.5 block">Module</label>
                   <select value={exportModule} onChange={e => setExportModule(e.target.value)} className="w-full p-3 border-2 border-gray-200 rounded-xl focus:border-purple-400 outline-none">
-                    {MODULES.filter(m => m.id !== 'it-requests').map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                    {ALL_MODULES.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
                   </select>
                 </div>
                 <div>
@@ -1262,9 +1360,9 @@ export default function ClinicSystem() {
                 </div>
               </div>
               <div className="space-y-4 max-w-sm">
-                <InputField label="Current Password" type="password" value={pwdForm.current} onChange={e => setPwdForm({...pwdForm, current: e.target.value})} placeholder="Enter current password" />
-                <InputField label="New Password" type="password" value={pwdForm.new} onChange={e => setPwdForm({...pwdForm, new: e.target.value})} placeholder="Enter new password" />
-                <InputField label="Confirm New Password" type="password" value={pwdForm.confirm} onChange={e => setPwdForm({...pwdForm, confirm: e.target.value})} placeholder="Confirm new password" />
+                <PasswordField label="Current Password" value={pwdForm.current} onChange={e => setPwdForm({...pwdForm, current: e.target.value})} placeholder="Enter current password" />
+                <PasswordField label="New Password" value={pwdForm.new} onChange={e => setPwdForm({...pwdForm, new: e.target.value})} placeholder="Enter new password" />
+                <PasswordField label="Confirm New Password" value={pwdForm.confirm} onChange={e => setPwdForm({...pwdForm, confirm: e.target.value})} placeholder="Confirm new password" />
                 <button onClick={changePassword} className={`w-full py-4 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all ${isAdmin ? 'bg-gradient-to-r from-purple-600 to-indigo-600' : 'bg-gradient-to-r from-blue-600 to-indigo-600'}`}>
                   Update Password
                 </button>
@@ -1302,7 +1400,6 @@ export default function ClinicSystem() {
                           {e.total_collected && <p className="text-lg font-bold text-emerald-600 mt-2">${Number(e.total_collected).toFixed(2)}</p>}
                         </div>
 
-                        {/* Status Update for IT Requests */}
                         {activeModule === 'it-requests' && (
                           <div>
                             {editingStatus === e.id ? (
@@ -1339,7 +1436,6 @@ export default function ClinicSystem() {
           {/* Entry Form - Staff */}
           {!isAdmin && view === 'entry' && (
             <div className="space-y-4">
-              {/* Daily Recon Form */}
               {activeModule === 'daily-recon' && (
                 <>
                   <div className={`bg-white rounded-2xl shadow-lg p-6 border-l-4 ${currentColors?.accent}`}>
@@ -1386,7 +1482,6 @@ export default function ClinicSystem() {
                 </>
               )}
 
-              {/* IT Requests Form */}
               {activeModule === 'it-requests' && (
                 <>
                   <div className={`bg-white rounded-2xl shadow-lg p-6 border-l-4 ${currentColors?.accent}`}>
@@ -1410,7 +1505,6 @@ export default function ClinicSystem() {
                 </>
               )}
 
-              {/* Other module forms would go here - simplified for space */}
               {activeModule === 'billing-inquiry' && (
                 <div className={`bg-white rounded-2xl shadow-lg p-6 border-l-4 ${currentColors?.accent}`}>
                   <h2 className="font-semibold mb-4 text-gray-800">Billing Inquiry</h2>
@@ -1471,7 +1565,6 @@ export default function ClinicSystem() {
                 </div>
               )}
 
-              {/* Save Button */}
               <button
                 onClick={() => saveEntry(activeModule)}
                 disabled={saving}
@@ -1517,7 +1610,6 @@ export default function ClinicSystem() {
         </main>
       </div>
 
-      {/* Mobile sidebar overlay */}
       {sidebarOpen && <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-30 lg:hidden" onClick={() => setSidebarOpen(false)} />}
     </div>
   );
