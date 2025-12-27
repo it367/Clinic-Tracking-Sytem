@@ -390,7 +390,12 @@ export default function ClinicSystem() {
       .from('users')
       .select(`*, user_locations(location_id, locations(id, name))`)
       .order('name');
+    if (error) {
+      console.error('Users load error:', error);
+      return;
+    }
     if (data) {
+      console.log('Loaded users:', data.length);
       const usersWithLocations = data.map(u => ({
         ...u,
         locations: u.user_locations?.map(ul => ul.locations) || []
@@ -403,8 +408,11 @@ export default function ClinicSystem() {
     const { data, error } = await supabase
       .from('documents')
       .select('*, uploader:uploaded_by(name)')
-      .order('created_at', { ascending: false })
+      .order('uploaded_at', { ascending: false })
       .limit(200);
+    if (error) {
+      console.error('Documents load error:', error);
+    }
     if (data) setDocuments(data);
   };
 
@@ -424,7 +432,11 @@ export default function ClinicSystem() {
     }
 
     const { data, error } = await query.limit(500);
+    if (error) {
+      console.error('Module data load error:', moduleId, error);
+    }
     if (data) {
+      console.log(`Loaded ${moduleId}:`, data.length, 'records');
       setModuleData(prev => ({ ...prev, [moduleId]: data }));
     }
     setLoading(false);
@@ -1292,7 +1304,7 @@ export default function ClinicSystem() {
                               <span>•</span>
                               <span>{doc.category}</span>
                               <span>•</span>
-                              <span>{new Date(doc.created_at).toLocaleDateString()}</span>
+                              <span>{new Date(doc.uploaded_at).toLocaleDateString()}</span>
                             </div>
                             {doc.uploader && <p className="text-xs text-gray-400 mt-1">Uploaded by: {doc.uploader.name}</p>}
                           </div>
