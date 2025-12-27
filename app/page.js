@@ -344,6 +344,23 @@ export default function ClinicSystem() {
   const [chatInput, setChatInput] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
 
+  const [entryDocuments, setEntryDocuments] = useState({});
+
+  const loadEntryDocuments = async (recordType, recordId) => {
+    const key = `${recordType}-${recordId}`;
+    if (entryDocuments[key]) return; // Already loaded
+    
+    const { data } = await supabase
+      .from('documents')
+      .select('*')
+      .eq('record_type', recordType)
+      .eq('record_id', recordId);
+    
+    if (data) {
+      setEntryDocuments(prev => ({ ...prev, [key]: data }));
+    }
+  };
+
   const today = new Date().toISOString().split('T')[0];
 
   const [forms, setForms] = useState({
@@ -386,34 +403,86 @@ export default function ClinicSystem() {
   };
 
   const loadUsers = async () => {
-    const { data, error } = await supabase
+    console.log('Loading users...');
+    
+    // Get all users without any joins
+    const { data: usersData, error: usersError } = await supabase
       .from('users')
-      .select(`*, user_locations(location_id, locations(id, name))`)
+      .select('*')
       .order('name');
-    if (error) {
-      console.error('Users load error:', error);
+    
+    if (usersError) {
+      console.error('Users load error:', usersError);
       return;
     }
-    if (data) {
-      console.log('Loaded users:', data.length);
-      const usersWithLocations = data.map(u => ({
-        ...u,
-        locations: u.user_locations?.map(ul => ul.locations) || []
-      }));
-      setUsers(usersWithLocations);
+    
+    if (!usersData || usersData.length === 0) {
+      setUsers([]);
+      return;
     }
+    
+    // Get user_locations separately (no join to users)
+    const { data: userLocsData } = await supabase
+      .from('user_locations')
+      .select('user_id, location_id');
+    
+    // Get all locations
+    const { data: locsData } = await supabase
+      .from('locations')
+      .select('id, name');
+    
+    // Build a location map for quick lookup
+    const locationMap = {};
+    locsData?.forEach(loc => { locationMap[loc.id] = loc; });
+    
+    // Combine users with their locations
+    const usersWithLocations = usersData.map(user => ({
+      ...user,
+      locations: userLocsData
+        ?.filter(ul => ul.user_id === user.id)
+        ?.map(ul => locationMap[ul.location_id])
+        ?.filter(Boolean) || []
+    }));
+    
+    console.log('Loaded users:', usersWithLocations.length);
+    setUsers(usersWithLocations);
   };
 
   const loadDocuments = async () => {
-    const { data, error } = await supabase
+    // Get documents without joining to users
+    const { data: docsData, error } = await supabase
       .from('documents')
-      .select('*, uploader:uploaded_by(name)')
+      .select('*')
       .order('uploaded_at', { ascending: false })
       .limit(200);
+    
     if (error) {
       console.error('Documents load error:', error);
+      return;
     }
-    if (data) setDocuments(data);
+    
+    if (!docsData || docsData.length === 0) {
+      setDocuments([]);
+      return;
+    }
+    
+    // Get uploader names separately
+    const uploaderIds = [...new Set(docsData.map(d => d.uploaded_by).filter(Boolean))];
+    const { data: uploadersData } = await supabase
+      .from('users')
+      .select('id, name')
+      .in('id', uploaderIds);
+    
+    const uploaderMap = {};
+    uploadersData?.forEach(u => { uploaderMap[u.id] = u; });
+    
+    const docsWithUploaders = docsData.map(doc => ({
+      ...doc,
+      uploader: uploaderMap[doc.uploaded_by] || null
+    }));
+    
+    console.log('Loaded documents:', docsWithUploaders.length);
+    setDocuments(docsWithUploaders);
   };
 
   const loadModuleData = async (moduleId) => {
@@ -421,7 +490,7 @@ export default function ClinicSystem() {
     const module = ALL_MODULES.find(m => m.id === moduleId);
     if (!module) return;
 
-    let query = supabase.from(module.table).select('*, locations(name), creator:created_by(name), updater:updated_by(name)').order('created_at', { ascending: false });
+    let query = supabase.from(module.table).select('*').order('created_at', { ascending: false });
 
     if (!isAdmin && selectedLocation) {
       const loc = locations.find(l => l.name === selectedLocation);
@@ -435,9 +504,31 @@ export default function ClinicSystem() {
     if (error) {
       console.error('Module data load error:', moduleId, error);
     }
-    if (data) {
-      console.log(`Loaded ${moduleId}:`, data.length, 'records');
-      setModuleData(prev => ({ ...prev, [moduleId]: data }));
+    if (data && data.length > 0) {
+      // Get location names
+      const locationIds = [...new Set(data.map(d => d.location_id).filter(Boolean))];
+      const { data: locsData } = await supabase.from('locations').select('id, name').in('id', locationIds);
+      const locMap = {};
+      locsData?.forEach(l => { locMap[l.id] = l; });
+      
+      // Get creator/updater names
+      const userIds = [...new Set([...data.map(d => d.created_by), ...data.map(d => d.updated_by)].filter(Boolean))];
+      const { data: usersData } = await supabase.from('users').select('id, name').in('id', userIds);
+      const userMap = {};
+      usersData?.forEach(u => { userMap[u.id] = u; });
+      
+      // Combine
+      const enrichedData = data.map(d => ({
+        ...d,
+        locations: locMap[d.location_id] || null,
+        creator: userMap[d.created_by] || null,
+        updater: userMap[d.updated_by] || null
+      }));
+      
+      console.log(`Loaded ${moduleId}:`, enrichedData.length, 'records');
+      setModuleData(prev => ({ ...prev, [moduleId]: enrichedData }));
+    } else {
+      setModuleData(prev => ({ ...prev, [moduleId]: [] }));
     }
     setLoading(false);
   };
@@ -472,12 +563,22 @@ export default function ClinicSystem() {
         return;
       }
 
-      const { data: userLocs } = await supabase
+      // Get user_locations separately without joins
+      const { data: userLocsData } = await supabase
         .from('user_locations')
-        .select('location_id, locations(id, name)')
+        .select('location_id')
         .eq('user_id', user.id);
-
-      const locationsList = userLocs?.map(ul => ul.locations).filter(Boolean) || [];
+      
+      // Get location details
+      const locIds = userLocsData?.map(ul => ul.location_id) || [];
+      let locationsList = [];
+      if (locIds.length > 0) {
+        const { data: locsData } = await supabase
+          .from('locations')
+          .select('id, name')
+          .in('id', locIds);
+        locationsList = locsData || [];
+      }
 
       await supabase.from('users').update({ last_login: new Date().toISOString() }).eq('id', user.id);
 
@@ -927,6 +1028,34 @@ export default function ClinicSystem() {
     setAiLoading(false);
   };
 
+  const getDocumentUrl = async (storagePath) => {
+    const { data } = await supabase.storage
+      .from('clinic-documents')
+      .createSignedUrl(storagePath, 3600); // 1 hour expiry
+    return data?.signedUrl;
+  };
+
+  const viewDocument = async (doc) => {
+    const url = await getDocumentUrl(doc.storage_path);
+    if (url) {
+      setViewingFile({ ...doc, url, name: doc.file_name, type: doc.file_type });
+    } else {
+      showMessage('error', 'Could not load document');
+    }
+  };
+
+  const downloadDocument = async (doc) => {
+    const url = await getDocumentUrl(doc.storage_path);
+    if (url) {
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = doc.file_name;
+      a.click();
+    } else {
+      showMessage('error', 'Could not download document');
+    }
+  };
+
   const getModuleEntries = () => moduleData[activeModule] || [];
   const currentColors = MODULE_COLORS[activeModule];
   const currentModule = ALL_MODULES.find(m => m.id === activeModule);
@@ -1291,16 +1420,16 @@ export default function ClinicSystem() {
                   {documents.map(doc => (
                     <div key={doc.id} className="p-4 rounded-xl border border-gray-200 hover:bg-gray-50 transition-colors">
                       <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                          <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
                             <File className="w-5 h-5 text-blue-600" />
                           </div>
-                          <div>
-                            <p className="font-medium text-gray-800">{doc.file_name}</p>
-                            <div className="flex items-center gap-2 text-xs text-gray-500">
+                          <div className="min-w-0 flex-1">
+                            <p className="font-medium text-gray-800 truncate">{doc.file_name}</p>
+                            <div className="flex items-center gap-2 text-xs text-gray-500 flex-wrap">
                               <span className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded-md font-medium">{getModuleName(doc.record_type)}</span>
                               <span>•</span>
-                              <span>ID: {doc.record_id}</span>
+                              <span>ID: {doc.record_id?.slice(0, 8)}...</span>
                               <span>•</span>
                               <span>{doc.category}</span>
                               <span>•</span>
@@ -1309,8 +1438,22 @@ export default function ClinicSystem() {
                             {doc.uploader && <p className="text-xs text-gray-400 mt-1">Uploaded by: {doc.uploader.name}</p>}
                           </div>
                         </div>
-                        <div className="text-sm text-gray-500">
-                          {(doc.file_size / 1024).toFixed(1)} KB
+                        <div className="flex items-center gap-2 ml-4">
+                          <span className="text-sm text-gray-500">{(doc.file_size / 1024).toFixed(1)} KB</span>
+                          <button
+                            onClick={() => viewDocument(doc)}
+                            className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"
+                            title="Preview"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => downloadDocument(doc)}
+                            className="p-2 text-emerald-500 hover:bg-emerald-50 rounded-lg transition-colors"
+                            title="Download"
+                          >
+                            <Download className="w-4 h-4" />
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -1395,51 +1538,78 @@ export default function ClinicSystem() {
                 <p className="text-gray-500 text-center py-8">No entries yet</p>
               ) : (
                 <div className="space-y-3">
-                  {entries.slice(0, 50).map(e => (
-                    <div key={e.id} className={`p-4 rounded-xl border-2 ${currentColors?.border} ${currentColors?.bg} hover:shadow-md transition-all`}>
-                      <div className="flex justify-between items-start gap-4">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <p className="font-semibold text-gray-800">
-                              {e.ticket_number ? `IT-${e.ticket_number}` : e.patient_name || e.vendor || e.recon_date || e.created_at?.split('T')[0]}
+                  {entries.slice(0, 50).map(e => {
+                    const docKey = `${activeModule}-${e.id}`;
+                    const docs = entryDocuments[docKey] || [];
+                    
+                    if (!entryDocuments[docKey]) {
+                      loadEntryDocuments(activeModule, e.id);
+                    }
+                    
+                    return (
+                      <div key={e.id} className={`p-4 rounded-xl border-2 ${currentColors?.border} ${currentColors?.bg} hover:shadow-md transition-all`}>
+                        <div className="flex justify-between items-start gap-4">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="font-semibold text-gray-800">
+                                {e.ticket_number ? `IT-${e.ticket_number}` : e.patient_name || e.vendor || e.recon_date || e.created_at?.split('T')[0]}
+                              </p>
+                              <StatusBadge status={e.status} />
+                            </div>
+                            <p className="text-sm text-gray-600 mt-1">
+                              {e.locations?.name} • {e.creator?.name || 'Unknown'} • {new Date(e.created_at).toLocaleDateString()}
                             </p>
-                            <StatusBadge status={e.status} />
-                          </div>
-                          <p className="text-sm text-gray-600 mt-1">
-                            {e.locations?.name} • {e.creator?.name || 'Unknown'} • {new Date(e.created_at).toLocaleDateString()}
-                          </p>
-                          {e.description_of_issue && <p className="text-sm text-gray-600 mt-2 line-clamp-2">{e.description_of_issue}</p>}
-                          {e.total_collected && <p className="text-lg font-bold text-emerald-600 mt-2">${Number(e.total_collected).toFixed(2)}</p>}
-                        </div>
-
-                        {activeModule === 'it-requests' && (
-                          <div>
-                            {editingStatus === e.id ? (
-                              <div className="space-y-2 w-44">
-                                <select defaultValue={e.status} id={`status-${e.id}`} className="w-full p-2 border-2 rounded-lg text-sm">
-                                  {IT_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-                                </select>
-                                <input type="text" id={`notes-${e.id}`} placeholder="Resolution notes" className="w-full p-2 border-2 rounded-lg text-sm" />
-                                <div className="flex gap-1">
-                                  <button
-                                    onClick={() => updateEntryStatus('it-requests', e.id, document.getElementById(`status-${e.id}`).value, { resolution_notes: document.getElementById(`notes-${e.id}`).value })}
-                                    className="flex-1 py-2 bg-emerald-500 text-white rounded-lg text-xs font-medium"
-                                  >
-                                    Save
-                                  </button>
-                                  <button onClick={() => setEditingStatus(null)} className="px-3 py-2 bg-gray-200 rounded-lg text-xs">Cancel</button>
-                                </div>
+                            {e.description_of_issue && <p className="text-sm text-gray-600 mt-2 line-clamp-2">{e.description_of_issue}</p>}
+                            {e.total_collected && <p className="text-lg font-bold text-emerald-600 mt-2">${Number(e.total_collected).toFixed(2)}</p>}
+                            
+                            {/* Documents for this entry */}
+                            {docs.length > 0 && (
+                              <div className="mt-3 flex flex-wrap gap-2">
+                                {docs.map(doc => (
+                                  <div key={doc.id} className="flex items-center gap-1 bg-white px-2 py-1 rounded-lg border text-xs">
+                                    <File className="w-3 h-3 text-gray-400" />
+                                    <span className="text-gray-600 max-w-24 truncate">{doc.file_name}</span>
+                                    <button onClick={() => viewDocument(doc)} className="p-0.5 text-blue-500 hover:bg-blue-100 rounded" title="Preview">
+                                      <Eye className="w-3 h-3" />
+                                    </button>
+                                    <button onClick={() => downloadDocument(doc)} className="p-0.5 text-emerald-500 hover:bg-emerald-100 rounded" title="Download">
+                                      <Download className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                ))}
                               </div>
-                            ) : (
-                              <button onClick={() => setEditingStatus(e.id)} className="text-xs text-purple-600 flex items-center gap-1 font-medium hover:underline">
-                                <Edit3 className="w-3 h-3" />Update
-                              </button>
                             )}
                           </div>
-                        )}
+
+                          {activeModule === 'it-requests' && (
+                            <div>
+                              {editingStatus === e.id ? (
+                                <div className="space-y-2 w-44">
+                                  <select defaultValue={e.status} id={`status-${e.id}`} className="w-full p-2 border-2 rounded-lg text-sm">
+                                    {IT_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                                  </select>
+                                  <input type="text" id={`notes-${e.id}`} placeholder="Resolution notes" className="w-full p-2 border-2 rounded-lg text-sm" />
+                                  <div className="flex gap-1">
+                                    <button
+                                      onClick={() => updateEntryStatus('it-requests', e.id, document.getElementById(`status-${e.id}`).value, { resolution_notes: document.getElementById(`notes-${e.id}`).value })}
+                                      className="flex-1 py-2 bg-emerald-500 text-white rounded-lg text-xs font-medium"
+                                    >
+                                      Save
+                                    </button>
+                                    <button onClick={() => setEditingStatus(null)} className="px-3 py-2 bg-gray-200 rounded-lg text-xs">Cancel</button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <button onClick={() => setEditingStatus(e.id)} className="text-xs text-purple-600 flex items-center gap-1 font-medium hover:underline">
+                                  <Edit3 className="w-3 h-3" />Update
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -1596,21 +1766,53 @@ export default function ClinicSystem() {
               ) : entries.length === 0 ? (
                 <p className="text-gray-500 text-center py-8">No entries yet</p>
               ) : (
-                <div className="space-y-2">
+                <div className="space-y-3">
                   {entries.slice(0, 30).map(e => {
                     const canEdit = canEditRecord(e.created_at);
+                    const docKey = `${activeModule}-${e.id}`;
+                    const docs = entryDocuments[docKey] || [];
+                    
+                    // Load documents for this entry if not loaded
+                    if (!entryDocuments[docKey]) {
+                      loadEntryDocuments(activeModule, e.id);
+                    }
+                    
                     return (
-                      <div key={e.id} className={`p-4 rounded-xl flex justify-between items-center ${currentColors?.bg} border ${currentColors?.border}`}>
-                        <div>
-                          <p className="font-medium text-gray-800">
-                            {e.ticket_number ? `IT-${e.ticket_number}` : e.patient_name || e.vendor || e.recon_date || new Date(e.created_at).toLocaleDateString()}
-                          </p>
-                          <p className="text-xs text-gray-500">{new Date(e.created_at).toLocaleDateString()}</p>
-                        </div>
-                        <div className="text-right flex items-center gap-2">
-                          {e.total_collected && <p className="font-bold text-emerald-600">${Number(e.total_collected).toFixed(2)}</p>}
-                          <StatusBadge status={e.status} />
-                          {!canEdit && <Lock className="w-4 h-4 text-gray-400" title="Locked (past Friday cutoff)" />}
+                      <div key={e.id} className={`p-4 rounded-xl ${currentColors?.bg} border ${currentColors?.border}`}>
+                        <div className="flex justify-between items-start">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <p className="font-medium text-gray-800">
+                                {e.ticket_number ? `IT-${e.ticket_number}` : e.patient_name || e.vendor || e.recon_date || new Date(e.created_at).toLocaleDateString()}
+                              </p>
+                              <StatusBadge status={e.status} />
+                              {!canEdit && <Lock className="w-4 h-4 text-gray-400" title="Locked (past Friday cutoff)" />}
+                            </div>
+                            <p className="text-xs text-gray-500 mt-1">{new Date(e.created_at).toLocaleDateString()}</p>
+                            
+                            {/* Documents for this entry */}
+                            {docs.length > 0 && (
+                              <div className="mt-3 space-y-1">
+                                <p className="text-xs font-medium text-gray-500">Attached Files:</p>
+                                {docs.map(doc => (
+                                  <div key={doc.id} className="flex items-center gap-2 text-sm">
+                                    <File className="w-3 h-3 text-gray-400" />
+                                    <span className="text-gray-600 truncate">{doc.file_name}</span>
+                                    <button
+                                      onClick={() => viewDocument(doc)}
+                                      className="p-1 text-blue-500 hover:bg-blue-100 rounded transition-colors"
+                                      title="Preview"
+                                    >
+                                      <Eye className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                          <div className="text-right">
+                            {e.total_collected && <p className="font-bold text-emerald-600">${Number(e.total_collected).toFixed(2)}</p>}
+                          </div>
                         </div>
                       </div>
                     );
