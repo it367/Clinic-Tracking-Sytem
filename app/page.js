@@ -1,8 +1,7 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
-import { DollarSign, FileText, Building2, Bot, Send, Loader2, LogOut, User, Upload, X, File, Shield, Receipt, CreditCard, Package, RefreshCw, Monitor, Menu, Eye, EyeOff, FolderOpen, Edit3, Users, Plus, Trash2, Lock, Download, Settings, MessageCircle, Sparkles, AlertCircle, Maximize2, Minimize2, Headphones } from 'lucide-react';
-
+import { DollarSign, FileText, Building2, Bot, Send, Loader2, LogOut, User, Upload, X, File, Shield, Receipt, CreditCard, Package, RefreshCw, Monitor, Menu, Eye, EyeOff, FolderOpen, Edit3, Users, Plus, Trash2, Lock, Download, Settings, MessageCircle, Sparkles, AlertCircle, Maximize2, Minimize2, Headphones, Search } from 'lucide-react';
 const MODULES = [
   { id: 'daily-recon', name: 'Daily Recon', icon: DollarSign, color: 'emerald', table: 'daily_recon' },
   { id: 'billing-inquiry', name: 'Billing Inquiry', icon: Receipt, color: 'blue', table: 'billing_inquiries' },
@@ -27,6 +26,9 @@ const MODULE_COLORS = {
 };
 
 const IT_STATUSES = ['Open', 'In Progress', 'Resolved', 'Closed'];
+const INQUIRY_TYPES = ['Refund', 'Balance', 'Insurance', 'Payment Plan', 'Other'];
+const REFUND_TYPES = ['Refund', 'Credit', 'Adjustment'];
+const CONTACT_METHODS = ['Phone', 'Email', 'Text'];
 const DATE_RANGES = ['This Week', 'Last 2 Weeks', 'This Month', 'Last Month', 'This Quarter', 'This Year', 'Custom'];
 
 function canEditRecord(createdAt) {
@@ -326,6 +328,8 @@ export default function ClinicSystem() {
   const [editingStatus, setEditingStatus] = useState(null);
   const [editingEntry, setEditingEntry] = useState(null);
   const [documents, setDocuments] = useState([]);
+  const [docSearch, setDocSearch] = useState('');
+const [nameForm, setNameForm] = useState('');
 
   const [showAddUser, setShowAddUser] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
@@ -364,16 +368,16 @@ export default function ClinicSystem() {
   const today = new Date().toISOString().split('T')[0];
 
   const [forms, setForms] = useState({
-    'daily-recon': { recon_date: today, cash: '', credit_card: '', checks_otc: '', insurance_checks: '', care_credit: '', vcc: '', efts: '', deposit_cash: '', deposit_credit_card: '', deposit_checks: '', deposit_insurance: '', deposit_care_credit: '', deposit_vcc: '', notes: '' },
-    'billing-inquiry': { patient_name: '', chart_number: '', date_of_service: '', amount_in_question: '', best_contact_method: '', best_contact_time: '', reviewed_by: '', initials: '', status: 'Pending', result: '' },
-    'bills-payment': { status: 'Pending', bill_date: today, vendor: '', description: '', amount: '', due_date: '', manager_initials: '', ap_reviewed: false, date_reviewed: '', paid_date: '' },
-    'order-requests': { date_entered: today, vendor: '', invoice_number: '', invoice_date: '', due_date: '', amount: '', status: 'Pending', notes: '' },
+    'daily-recon': { recon_date: today, cash: '', credit_card: '', checks_otc: '', insurance_checks: '', care_credit: '', vcc: '', efts: '', deposit_cash: '', deposit_credit_card: '', deposit_checks: '', deposit_insurance: '', deposit_care_credit: '', deposit_vcc: '', deposit_efts: '', notes: '', entered_by: '' },
+    'billing-inquiry': { patient_name: '', chart_number: '', parent_name: '', date_of_request: today, inquiry_type: '', description: '', amount_in_question: '', best_contact_method: '', best_contact_time: '', billing_team_reviewed: '', date_reviewed: '', status: 'Pending', result: '' },
+    'bills-payment': { bill_status: 'Pending', bill_date: today, vendor: '', description: '', amount: '', due_date: '', manager_initials: '', ap_reviewed: '', date_reviewed: '', paid: '' },
+    'order-requests': { date_entered: today, vendor: '', invoice_number: '', invoice_date: '', due_date: '', amount: '', entered_by: '', notes: '' },
     'refund-requests': { patient_name: '', chart_number: '', parent_name: '', rp_address: '', date_of_request: today, type: '', description: '', amount_requested: '', best_contact_method: '', eassist_audited: '', status: 'Pending' },
-    'it-requests': { date_reported: today, urgency: '', requester_name: '', device_system: '', description_of_issue: '', best_contact_method: '', best_contact_time: '' }
+   'it-requests': { date_reported: today, urgency: '', requester_name: '', device_system: '', description_of_issue: '', best_contact_method: '', best_contact_time: '', assigned_to: '', status: 'Open', resolution_notes: '', completed_by: '' }
   });
 
   const [files, setFiles] = useState({
-    'daily-recon': { eodDaySheets: [], eodBankReceipts: [], otherFiles: [] },
+  'daily-recon': { documents: [] },
     'billing-inquiry': { documentation: [] },
     'bills-payment': { documentation: [] },
     'order-requests': { orderInvoices: [] },
@@ -382,7 +386,7 @@ export default function ClinicSystem() {
   });
 
   useEffect(() => { loadLocations(); }, []);
-
+useEffect(() => { if (currentUser) setNameForm(currentUser.name || ''); }, [currentUser]);
   useEffect(() => {
     if (currentUser && (selectedLocation || isAdmin)) {
       loadModuleData(activeModule);
@@ -742,7 +746,22 @@ export default function ClinicSystem() {
     setPwdForm({ current: '', new: '', confirm: '' });
     showMessage('success', '✓ Password changed successfully!');
   };
-
+const changeName = async () => {
+  if (!nameForm.trim()) {
+    showMessage('error', 'Name cannot be empty');
+    return;
+  }
+  const { error } = await supabase
+    .from('users')
+    .update({ name: nameForm.trim(), updated_by: currentUser.id })
+    .eq('id', currentUser.id);
+  if (error) {
+    showMessage('error', 'Failed to update name');
+    return;
+  }
+  setCurrentUser({ ...currentUser, name: nameForm.trim() });
+  showMessage('success', '✓ Name updated successfully!');
+};
   const updateForm = (module, field, value) => {
     setForms(prev => ({ ...prev, [module]: { ...prev[module], [field]: value } }));
   };
@@ -816,66 +835,71 @@ export default function ClinicSystem() {
 
     let entryData = { location_id: loc.id, created_by: currentUser.id, updated_by: currentUser.id };
 
-    if (moduleId === 'daily-recon') {
-      entryData = {
-        ...entryData,
-        recon_date: form.recon_date,
-        cash: parseFloat(form.cash) || 0,
-        credit_card: parseFloat(form.credit_card) || 0,
-        checks_otc: parseFloat(form.checks_otc) || 0,
-        insurance_checks: parseFloat(form.insurance_checks) || 0,
-        care_credit: parseFloat(form.care_credit) || 0,
-        vcc: parseFloat(form.vcc) || 0,
-        efts: parseFloat(form.efts) || 0,
-        deposit_cash: parseFloat(form.deposit_cash) || 0,
-        deposit_credit_card: parseFloat(form.deposit_credit_card) || 0,
-        deposit_checks: parseFloat(form.deposit_checks) || 0,
-        deposit_insurance: parseFloat(form.deposit_insurance) || 0,
-        deposit_care_credit: parseFloat(form.deposit_care_credit) || 0,
-        deposit_vcc: parseFloat(form.deposit_vcc) || 0,
-        notes: form.notes
-      };
-    } else if (moduleId === 'billing-inquiry') {
-      entryData = {
-        ...entryData,
-        patient_name: form.patient_name,
-        chart_number: form.chart_number,
-        date_of_service: form.date_of_service || null,
-        amount_in_question: parseFloat(form.amount_in_question) || null,
-        best_contact_method: form.best_contact_method || null,
-        best_contact_time: form.best_contact_time,
-        reviewed_by: form.reviewed_by,
-        initials: form.initials,
-        status: form.status || 'Pending',
-        result: form.result
-      };
-    } else if (moduleId === 'bills-payment') {
-      entryData = {
-        ...entryData,
-        bill_date: form.bill_date,
-        vendor: form.vendor,
-        description: form.description,
-        amount: parseFloat(form.amount) || 0,
-        due_date: form.due_date || null,
-        status: form.status || 'Pending',
-        manager_initials: form.manager_initials,
-        ap_reviewed: form.ap_reviewed === 'Yes',
-        date_reviewed: form.date_reviewed || null,
-        paid_date: form.paid_date || null
-      };
-    } else if (moduleId === 'order-requests') {
-      entryData = {
-        ...entryData,
-        date_entered: form.date_entered,
-        vendor: form.vendor,
-        invoice_number: form.invoice_number,
-        invoice_date: form.invoice_date || null,
-        due_date: form.due_date || null,
-        amount: parseFloat(form.amount) || 0,
-        status: form.status || 'Pending',
-        notes: form.notes
-      };
-    } else if (moduleId === 'refund-requests') {
+if (moduleId === 'daily-recon') {
+  entryData = {
+    ...entryData,
+    recon_date: form.recon_date,
+    cash: parseFloat(form.cash) || 0,
+    credit_card: parseFloat(form.credit_card) || 0,
+    checks_otc: parseFloat(form.checks_otc) || 0,
+    insurance_checks: parseFloat(form.insurance_checks) || 0,
+    care_credit: parseFloat(form.care_credit) || 0,
+    vcc: parseFloat(form.vcc) || 0,
+    efts: parseFloat(form.efts) || 0,
+    deposit_cash: parseFloat(form.deposit_cash) || 0,
+    deposit_credit_card: parseFloat(form.deposit_credit_card) || 0,
+    deposit_checks: parseFloat(form.deposit_checks) || 0,
+    deposit_insurance: parseFloat(form.deposit_insurance) || 0,
+    deposit_care_credit: parseFloat(form.deposit_care_credit) || 0,
+    deposit_vcc: parseFloat(form.deposit_vcc) || 0,
+    deposit_efts: parseFloat(form.deposit_efts) || 0,
+    notes: form.notes,
+    entered_by: currentUser.name
+  };
+} else if (moduleId === 'billing-inquiry') {
+  entryData = {
+    ...entryData,
+    patient_name: form.patient_name,
+    chart_number: form.chart_number,
+    parent_name: form.parent_name,
+    date_of_request: form.date_of_request || null,
+    inquiry_type: form.inquiry_type,
+    description: form.description,
+    amount_in_question: parseFloat(form.amount_in_question) || null,
+    best_contact_method: form.best_contact_method || null,
+    best_contact_time: form.best_contact_time,
+    billing_team_reviewed: form.billing_team_reviewed,
+    date_reviewed: form.date_reviewed || null,
+    status: form.status || 'Pending',
+    result: form.result
+  };
+} else if (moduleId === 'bills-payment') {
+  entryData = {
+    ...entryData,
+    bill_status: form.bill_status || 'Pending',
+    bill_date: form.bill_date,
+    vendor: form.vendor,
+    description: form.description,
+    amount: parseFloat(form.amount) || 0,
+    due_date: form.due_date || null,
+    manager_initials: form.manager_initials,
+    ap_reviewed: form.ap_reviewed,
+    date_reviewed: form.date_reviewed || null,
+    paid: form.paid
+  };
+} else if (moduleId === 'order-requests') {
+  entryData = {
+    ...entryData,
+    date_entered: form.date_entered,
+    vendor: form.vendor,
+    invoice_number: form.invoice_number,
+    invoice_date: form.invoice_date || null,
+    due_date: form.due_date || null,
+    amount: parseFloat(form.amount) || 0,
+    entered_by: currentUser.name,
+    notes: form.notes
+  };
+} else if (moduleId === 'refund-requests') {
       entryData = {
         ...entryData,
         patient_name: form.patient_name,
@@ -1419,68 +1443,91 @@ export default function ClinicSystem() {
             </div>
           )}
 
-          {/* ADMIN: Documents */}
-          {isAdmin && adminView === 'documents' && (
-            <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-indigo-500 rounded-xl flex items-center justify-center">
-                  <FolderOpen className="w-6 h-6 text-white" />
+{/* ADMIN: Documents */}
+{isAdmin && adminView === 'documents' && (
+  <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
+    <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center gap-3">
+        <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-indigo-500 rounded-xl flex items-center justify-center">
+          <FolderOpen className="w-6 h-6 text-white" />
+        </div>
+        <div>
+          <h2 className="font-semibold text-gray-800">All Uploaded Documents</h2>
+          <p className="text-sm text-gray-500">{documents.filter(doc => {
+            if (!docSearch) return true;
+            const search = docSearch.toLowerCase();
+            return doc.file_name?.toLowerCase().includes(search) || doc.record_type?.toLowerCase().includes(search) || doc.category?.toLowerCase().includes(search) || doc.uploader?.name?.toLowerCase().includes(search);
+          }).length} files</p>
+        </div>
+      </div>
+      <div className="relative w-64">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+        <input
+          type="text"
+          value={docSearch}
+          onChange={e => setDocSearch(e.target.value)}
+          placeholder="Search documents..."
+          className="w-full pl-10 pr-4 py-2.5 border-2 border-gray-200 rounded-xl text-sm focus:border-purple-400 outline-none"
+        />
+      </div>
+    </div>
+    {documents.filter(doc => {
+      if (!docSearch) return true;
+      const search = docSearch.toLowerCase();
+      return doc.file_name?.toLowerCase().includes(search) || doc.record_type?.toLowerCase().includes(search) || doc.category?.toLowerCase().includes(search) || doc.uploader?.name?.toLowerCase().includes(search);
+    }).length === 0 ? (
+      <p className="text-gray-500 text-center py-8">{docSearch ? 'No documents match your search' : 'No documents uploaded yet'}</p>
+    ) : (
+      <div className="space-y-2">
+        {documents.filter(doc => {
+          if (!docSearch) return true;
+          const search = docSearch.toLowerCase();
+          return doc.file_name?.toLowerCase().includes(search) || doc.record_type?.toLowerCase().includes(search) || doc.category?.toLowerCase().includes(search) || doc.uploader?.name?.toLowerCase().includes(search);
+        }).map(doc => (
+          <div key={doc.id} className="p-4 rounded-xl border border-gray-200 hover:bg-gray-50 transition-colors">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3 flex-1 min-w-0">
+                <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <File className="w-5 h-5 text-blue-600" />
                 </div>
-                <div>
-                  <h2 className="font-semibold text-gray-800">All Uploaded Documents</h2>
-                  <p className="text-sm text-gray-500">{documents.length} files</p>
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium text-gray-800 truncate">{doc.file_name}</p>
+                  <div className="flex items-center gap-2 text-xs text-gray-500 flex-wrap">
+                    <span className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded-md font-medium">{getModuleName(doc.record_type)}</span>
+                    <span>•</span>
+                    <span>ID: {doc.record_id?.slice(0, 8)}...</span>
+                    <span>•</span>
+                    <span>{doc.category}</span>
+                    <span>•</span>
+                    <span>{new Date(doc.uploaded_at).toLocaleDateString()}</span>
+                  </div>
+                  {doc.uploader && <p className="text-xs text-gray-400 mt-1">Uploaded by: {doc.uploader.name}</p>}
                 </div>
               </div>
-              {documents.length === 0 ? (
-                <p className="text-gray-500 text-center py-8">No documents uploaded yet</p>
-              ) : (
-                <div className="space-y-2">
-                  {documents.map(doc => (
-                    <div key={doc.id} className="p-4 rounded-xl border border-gray-200 hover:bg-gray-50 transition-colors">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3 flex-1 min-w-0">
-                          <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                            <File className="w-5 h-5 text-blue-600" />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="font-medium text-gray-800 truncate">{doc.file_name}</p>
-                            <div className="flex items-center gap-2 text-xs text-gray-500 flex-wrap">
-                              <span className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded-md font-medium">{getModuleName(doc.record_type)}</span>
-                              <span>•</span>
-                              <span>ID: {doc.record_id?.slice(0, 8)}...</span>
-                              <span>•</span>
-                              <span>{doc.category}</span>
-                              <span>•</span>
-                              <span>{new Date(doc.uploaded_at).toLocaleDateString()}</span>
-                            </div>
-                            {doc.uploader && <p className="text-xs text-gray-400 mt-1">Uploaded by: {doc.uploader.name}</p>}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2 ml-4">
-                          <span className="text-sm text-gray-500">{(doc.file_size / 1024).toFixed(1)} KB</span>
-                          <button
-                            onClick={() => viewDocument(doc)}
-                            className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"
-                            title="Preview"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => downloadDocument(doc)}
-                            className="p-2 text-emerald-500 hover:bg-emerald-50 rounded-lg transition-colors"
-                            title="Download"
-                          >
-                            <Download className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+              <div className="flex items-center gap-2 ml-4">
+                <span className="text-sm text-gray-500">{(doc.file_size / 1024).toFixed(1)} KB</span>
+                <button
+                  onClick={() => viewDocument(doc)}
+                  className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"
+                  title="Preview"
+                >
+                  <Eye className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => downloadDocument(doc)}
+                  className="p-2 text-emerald-500 hover:bg-emerald-50 rounded-lg transition-colors"
+                  title="Download"
+                >
+                  <Download className="w-4 h-4" />
+                </button>
+              </div>
             </div>
-          )}
-
+          </div>
+        ))}
+      </div>
+    )}
+  </div>
+)}
           {/* ADMIN: Export */}
           {isAdmin && adminView === 'export' && (
             <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
@@ -1521,27 +1568,50 @@ export default function ClinicSystem() {
           )}
 
           {/* Settings */}
-          {((isAdmin && adminView === 'settings') || (!isAdmin && view === 'settings')) && (
-            <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
-              <div className="flex items-center gap-3 mb-6">
-                <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${isAdmin ? 'bg-gradient-to-br from-purple-500 to-indigo-500' : 'bg-gradient-to-br from-blue-500 to-indigo-500'}`}>
-                  <Lock className="w-6 h-6 text-white" />
-                </div>
-                <div>
-                  <h2 className="font-semibold text-gray-800">Change Password</h2>
-                  <p className="text-sm text-gray-500">Update your account password</p>
-                </div>
-              </div>
-              <div className="space-y-4 max-w-sm">
-                <PasswordField label="Current Password" value={pwdForm.current} onChange={e => setPwdForm({...pwdForm, current: e.target.value})} placeholder="Enter current password" />
-                <PasswordField label="New Password" value={pwdForm.new} onChange={e => setPwdForm({...pwdForm, new: e.target.value})} placeholder="Enter new password" />
-                <PasswordField label="Confirm New Password" value={pwdForm.confirm} onChange={e => setPwdForm({...pwdForm, confirm: e.target.value})} placeholder="Confirm new password" />
-                <button onClick={changePassword} className={`w-full py-4 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all ${isAdmin ? 'bg-gradient-to-r from-purple-600 to-indigo-600' : 'bg-gradient-to-r from-blue-600 to-indigo-600'}`}>
-                  Update Password
-                </button>
-              </div>
-            </div>
-          )}
+{/* Settings */}
+{((isAdmin && adminView === 'settings') || (!isAdmin && view === 'settings')) && (
+  <div className="space-y-6">
+    {/* Name Change Section */}
+    <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
+      <div className="flex items-center gap-3 mb-6">
+        <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${isAdmin ? 'bg-gradient-to-br from-purple-500 to-indigo-500' : 'bg-gradient-to-br from-blue-500 to-indigo-500'}`}>
+          <User className="w-6 h-6 text-white" />
+        </div>
+        <div>
+          <h2 className="font-semibold text-gray-800">Change Display Name</h2>
+          <p className="text-sm text-gray-500">Update how your name appears in the system</p>
+        </div>
+      </div>
+      <div className="space-y-4 max-w-sm">
+        <InputField label="Display Name" value={nameForm} onChange={e => setNameForm(e.target.value)} placeholder="Enter your name" />
+        <button onClick={changeName} className={`w-full py-4 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all ${isAdmin ? 'bg-gradient-to-r from-purple-600 to-indigo-600' : 'bg-gradient-to-r from-blue-600 to-indigo-600'}`}>
+          Update Name
+        </button>
+      </div>
+    </div>
+    
+    {/* Password Change Section */}
+    <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
+      <div className="flex items-center gap-3 mb-6">
+        <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${isAdmin ? 'bg-gradient-to-br from-purple-500 to-indigo-500' : 'bg-gradient-to-br from-blue-500 to-indigo-500'}`}>
+          <Lock className="w-6 h-6 text-white" />
+        </div>
+        <div>
+          <h2 className="font-semibold text-gray-800">Change Password</h2>
+          <p className="text-sm text-gray-500">Update your account password</p>
+        </div>
+      </div>
+      <div className="space-y-4 max-w-sm">
+        <PasswordField label="Current Password" value={pwdForm.current} onChange={e => setPwdForm({...pwdForm, current: e.target.value})} placeholder="Enter current password" />
+        <PasswordField label="New Password" value={pwdForm.new} onChange={e => setPwdForm({...pwdForm, new: e.target.value})} placeholder="Enter new password" />
+        <PasswordField label="Confirm New Password" value={pwdForm.confirm} onChange={e => setPwdForm({...pwdForm, confirm: e.target.value})} placeholder="Confirm new password" />
+        <button onClick={changePassword} className={`w-full py-4 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all ${isAdmin ? 'bg-gradient-to-r from-purple-600 to-indigo-600' : 'bg-gradient-to-r from-blue-600 to-indigo-600'}`}>
+          Update Password
+        </button>
+      </div>
+    </div>
+  </div>
+)}
 
           {/* Records View - Admin */}
           {isAdmin && adminView === 'records' && (
@@ -1663,22 +1733,18 @@ export default function ClinicSystem() {
                       <InputField label="Checks" prefix="$" value={forms['daily-recon'].deposit_checks} onChange={e => updateForm('daily-recon', 'deposit_checks', e.target.value)} />
                       <InputField label="Insurance" prefix="$" value={forms['daily-recon'].deposit_insurance} onChange={e => updateForm('daily-recon', 'deposit_insurance', e.target.value)} />
                       <InputField label="Care Credit" prefix="$" value={forms['daily-recon'].deposit_care_credit} onChange={e => updateForm('daily-recon', 'deposit_care_credit', e.target.value)} />
-                      <InputField label="VCC" prefix="$" value={forms['daily-recon'].deposit_vcc} onChange={e => updateForm('daily-recon', 'deposit_vcc', e.target.value)} />
+                      <InputField label="EFTs" prefix="$" value={forms['daily-recon'].deposit_efts} onChange={e => updateForm('daily-recon', 'deposit_efts', e.target.value)} />
                     </div>
                     <div className="mt-4">
                       <InputField label="Notes" value={forms['daily-recon'].notes} onChange={e => updateForm('daily-recon', 'notes', e.target.value)} />
                     </div>
                   </div>
-                  <div className="bg-white rounded-2xl shadow-lg p-6">
-                    <h2 className="font-semibold mb-4 text-gray-800 flex items-center gap-2">
-                      <File className="w-5 h-5 text-amber-500" />Documents
-                    </h2>
-                    <div className="space-y-4">
-                      <FileUpload label="EOD Day Sheets" files={files['daily-recon'].eodDaySheets} onFilesChange={f => updateFiles('daily-recon', 'eodDaySheets', f)} onViewFile={setViewingFile} />
-                      <FileUpload label="EOD Bank Receipts" files={files['daily-recon'].eodBankReceipts} onFilesChange={f => updateFiles('daily-recon', 'eodBankReceipts', f)} onViewFile={setViewingFile} />
-                      <FileUpload label="Other Files" files={files['daily-recon'].otherFiles} onFilesChange={f => updateFiles('daily-recon', 'otherFiles', f)} onViewFile={setViewingFile} />
-                    </div>
-                  </div>
+<div className="bg-white rounded-2xl shadow-lg p-6">
+  <h2 className="font-semibold mb-4 text-gray-800 flex items-center gap-2">
+    <File className="w-5 h-5 text-amber-500" />Documents
+  </h2>
+  <FileUpload label="Upload Documents (EOD Sheets, Bank Receipts, etc.)" files={files['daily-recon'].documents} onFilesChange={f => updateFiles('daily-recon', 'documents', f)} onViewFile={setViewingFile} />
+</div>
                 </>
               )}
 
@@ -1705,97 +1771,106 @@ export default function ClinicSystem() {
                 </>
               )}
 
-              {activeModule === 'billing-inquiry' && (
-                <>
-                  <div className={`bg-white rounded-2xl shadow-lg p-6 border-l-4 ${currentColors?.accent}`}>
-                    <h2 className="font-semibold mb-4 text-gray-800">Billing Inquiry</h2>
-                    <div className="grid grid-cols-2 gap-4">
-                      <InputField label="Patient Name" value={forms['billing-inquiry'].patient_name} onChange={e => updateForm('billing-inquiry', 'patient_name', e.target.value)} />
-                      <InputField label="Chart Number" value={forms['billing-inquiry'].chart_number} onChange={e => updateForm('billing-inquiry', 'chart_number', e.target.value)} />
-                      <InputField label="Date of Service" type="date" value={forms['billing-inquiry'].date_of_service} onChange={e => updateForm('billing-inquiry', 'date_of_service', e.target.value)} />
-                      <InputField label="Amount in Question" prefix="$" value={forms['billing-inquiry'].amount_in_question} onChange={e => updateForm('billing-inquiry', 'amount_in_question', e.target.value)} />
-                      <InputField label="Contact Method" value={forms['billing-inquiry'].best_contact_method} onChange={e => updateForm('billing-inquiry', 'best_contact_method', e.target.value)} options={['Phone', 'Email', 'Text']} />
-                      <InputField label="Contact Time" value={forms['billing-inquiry'].best_contact_time} onChange={e => updateForm('billing-inquiry', 'best_contact_time', e.target.value)} />
-                      <InputField label="Status" value={forms['billing-inquiry'].status} onChange={e => updateForm('billing-inquiry', 'status', e.target.value)} options={['Pending', 'In Progress', 'Resolved']} />
-                      <InputField label="Result" value={forms['billing-inquiry'].result} onChange={e => updateForm('billing-inquiry', 'result', e.target.value)} />
-                    </div>
-                  </div>
-                  <div className="bg-white rounded-2xl shadow-lg p-6">
-                    <h2 className="font-semibold mb-4 text-gray-800 flex items-center gap-2">
-                      <File className="w-5 h-5 text-blue-500" />Documents
-                    </h2>
-                    <FileUpload label="Supporting Documentation" files={files['billing-inquiry'].documentation} onFilesChange={f => updateFiles('billing-inquiry', 'documentation', f)} onViewFile={setViewingFile} />
-                  </div>
-                </>
-              )}
+{activeModule === 'billing-inquiry' && (
+  <>
+    <div className={`bg-white rounded-2xl shadow-lg p-6 border-l-4 ${currentColors?.accent}`}>
+      <h2 className="font-semibold mb-4 text-gray-800">Patient Accounting Inquiry</h2>
+      <div className="grid grid-cols-2 gap-4">
+        <InputField label="Patient Name" value={forms['billing-inquiry'].patient_name} onChange={e => updateForm('billing-inquiry', 'patient_name', e.target.value)} />
+        <InputField label="Chart Number" value={forms['billing-inquiry'].chart_number} onChange={e => updateForm('billing-inquiry', 'chart_number', e.target.value)} />
+        <InputField label="Parent Name" value={forms['billing-inquiry'].parent_name} onChange={e => updateForm('billing-inquiry', 'parent_name', e.target.value)} />
+        <InputField label="Date of Request" type="date" value={forms['billing-inquiry'].date_of_request} onChange={e => updateForm('billing-inquiry', 'date_of_request', e.target.value)} />
+        <InputField label="Type of Inquiry" value={forms['billing-inquiry'].inquiry_type} onChange={e => updateForm('billing-inquiry', 'inquiry_type', e.target.value)} options={INQUIRY_TYPES} />
+        <InputField label="Amount in Question" prefix="$" value={forms['billing-inquiry'].amount_in_question} onChange={e => updateForm('billing-inquiry', 'amount_in_question', e.target.value)} />
+        <InputField label="Best Contact Method" value={forms['billing-inquiry'].best_contact_method} onChange={e => updateForm('billing-inquiry', 'best_contact_method', e.target.value)} options={CONTACT_METHODS} />
+        <InputField label="Best Time to Contact" value={forms['billing-inquiry'].best_contact_time} onChange={e => updateForm('billing-inquiry', 'best_contact_time', e.target.value)} />
+        <InputField label="Billing Team Reviewed" value={forms['billing-inquiry'].billing_team_reviewed} onChange={e => updateForm('billing-inquiry', 'billing_team_reviewed', e.target.value)} />
+        <InputField label="Date Reviewed" type="date" value={forms['billing-inquiry'].date_reviewed} onChange={e => updateForm('billing-inquiry', 'date_reviewed', e.target.value)} />
+        <InputField label="Status" value={forms['billing-inquiry'].status} onChange={e => updateForm('billing-inquiry', 'status', e.target.value)} options={['Pending', 'In Progress', 'Resolved']} />
+        <InputField label="Result" value={forms['billing-inquiry'].result} onChange={e => updateForm('billing-inquiry', 'result', e.target.value)} />
+      </div>
+      <div className="mt-4">
+        <InputField label="Description" large value={forms['billing-inquiry'].description} onChange={e => updateForm('billing-inquiry', 'description', e.target.value)} />
+      </div>
+    </div>
+    <div className="bg-white rounded-2xl shadow-lg p-6">
+      <FileUpload label="Supporting Documentation" files={files['billing-inquiry'].documentation} onFilesChange={f => updateFiles('billing-inquiry', 'documentation', f)} onViewFile={setViewingFile} />
+    </div>
+  </>
+)}
 
-              {activeModule === 'bills-payment' && (
-                <>
-                  <div className={`bg-white rounded-2xl shadow-lg p-6 border-l-4 ${currentColors?.accent}`}>
-                    <h2 className="font-semibold mb-4 text-gray-800">Bills Payment</h2>
-                    <div className="grid grid-cols-2 gap-4">
-                      <InputField label="Bill Date" type="date" value={forms['bills-payment'].bill_date} onChange={e => updateForm('bills-payment', 'bill_date', e.target.value)} />
-                      <InputField label="Vendor" value={forms['bills-payment'].vendor} onChange={e => updateForm('bills-payment', 'vendor', e.target.value)} />
-                      <InputField label="Description" value={forms['bills-payment'].description} onChange={e => updateForm('bills-payment', 'description', e.target.value)} />
-                      <InputField label="Amount" prefix="$" value={forms['bills-payment'].amount} onChange={e => updateForm('bills-payment', 'amount', e.target.value)} />
-                      <InputField label="Due Date" type="date" value={forms['bills-payment'].due_date} onChange={e => updateForm('bills-payment', 'due_date', e.target.value)} />
-                      <InputField label="Status" value={forms['bills-payment'].status} onChange={e => updateForm('bills-payment', 'status', e.target.value)} options={['Pending', 'Approved', 'Paid']} />
-                    </div>
-                  </div>
-                  <div className="bg-white rounded-2xl shadow-lg p-6">
-                    <h2 className="font-semibold mb-4 text-gray-800 flex items-center gap-2">
-                      <File className="w-5 h-5 text-violet-500" />Documents
-                    </h2>
-                    <FileUpload label="Bill / Invoice Documents" files={files['bills-payment'].documentation} onFilesChange={f => updateFiles('bills-payment', 'documentation', f)} onViewFile={setViewingFile} />
-                  </div>
-                </>
-              )}
+{activeModule === 'bills-payment' && (
+  <>
+    <div className={`bg-white rounded-2xl shadow-lg p-6 border-l-4 ${currentColors?.accent}`}>
+      <h2 className="font-semibold mb-4 text-gray-800">Bills Payment Log</h2>
+      <div className="grid grid-cols-2 gap-4">
+        <InputField label="Bill Status" value={forms['bills-payment'].bill_status} onChange={e => updateForm('bills-payment', 'bill_status', e.target.value)} options={['Pending', 'Approved', 'Paid']} />
+        <InputField label="Date" type="date" value={forms['bills-payment'].bill_date} onChange={e => updateForm('bills-payment', 'bill_date', e.target.value)} />
+        <InputField label="Vendor" value={forms['bills-payment'].vendor} onChange={e => updateForm('bills-payment', 'vendor', e.target.value)} />
+        <InputField label="Amount" prefix="$" value={forms['bills-payment'].amount} onChange={e => updateForm('bills-payment', 'amount', e.target.value)} />
+        <InputField label="Due Date" type="date" value={forms['bills-payment'].due_date} onChange={e => updateForm('bills-payment', 'due_date', e.target.value)} />
+        <InputField label="Manager Initials" value={forms['bills-payment'].manager_initials} onChange={e => updateForm('bills-payment', 'manager_initials', e.target.value)} />
+        <InputField label="Accounts Payable Reviewed" value={forms['bills-payment'].ap_reviewed} onChange={e => updateForm('bills-payment', 'ap_reviewed', e.target.value)} options={['Yes', 'No']} />
+        <InputField label="Date Reviewed" type="date" value={forms['bills-payment'].date_reviewed} onChange={e => updateForm('bills-payment', 'date_reviewed', e.target.value)} />
+        <InputField label="Paid (Y/N)" value={forms['bills-payment'].paid} onChange={e => updateForm('bills-payment', 'paid', e.target.value)} options={['Yes', 'No']} />
+      </div>
+      <div className="mt-4">
+        <InputField label="Description (Bill Details)" large value={forms['bills-payment'].description} onChange={e => updateForm('bills-payment', 'description', e.target.value)} />
+      </div>
+    </div>
+    <div className="bg-white rounded-2xl shadow-lg p-6">
+      <FileUpload label="Bill / Invoice Documents" files={files['bills-payment'].documentation} onFilesChange={f => updateFiles('bills-payment', 'documentation', f)} onViewFile={setViewingFile} />
+    </div>
+  </>
+)}
 
-              {activeModule === 'order-requests' && (
-                <>
-                  <div className={`bg-white rounded-2xl shadow-lg p-6 border-l-4 ${currentColors?.accent}`}>
-                    <h2 className="font-semibold mb-4 text-gray-800">Order Request</h2>
-                    <div className="grid grid-cols-2 gap-4">
-                      <InputField label="Date Entered" type="date" value={forms['order-requests'].date_entered} onChange={e => updateForm('order-requests', 'date_entered', e.target.value)} />
-                      <InputField label="Vendor" value={forms['order-requests'].vendor} onChange={e => updateForm('order-requests', 'vendor', e.target.value)} />
-                      <InputField label="Invoice Number" value={forms['order-requests'].invoice_number} onChange={e => updateForm('order-requests', 'invoice_number', e.target.value)} />
-                      <InputField label="Invoice Date" type="date" value={forms['order-requests'].invoice_date} onChange={e => updateForm('order-requests', 'invoice_date', e.target.value)} />
-                      <InputField label="Due Date" type="date" value={forms['order-requests'].due_date} onChange={e => updateForm('order-requests', 'due_date', e.target.value)} />
-                      <InputField label="Amount" prefix="$" value={forms['order-requests'].amount} onChange={e => updateForm('order-requests', 'amount', e.target.value)} />
-                      <InputField label="Status" value={forms['order-requests'].status} onChange={e => updateForm('order-requests', 'status', e.target.value)} options={['Pending', 'Approved', 'Paid']} />
-                      <InputField label="Notes" value={forms['order-requests'].notes} onChange={e => updateForm('order-requests', 'notes', e.target.value)} />
-                    </div>
-                  </div>
-                  <div className="bg-white rounded-2xl shadow-lg p-6">
-                    <h2 className="font-semibold mb-4 text-gray-800 flex items-center gap-2">
-                      <File className="w-5 h-5 text-amber-500" />Documents
-                    </h2>
-                    <FileUpload label="Order Invoices / POs" files={files['order-requests'].orderInvoices} onFilesChange={f => updateFiles('order-requests', 'orderInvoices', f)} onViewFile={setViewingFile} />
-                  </div>
-                </>
-              )}
+{activeModule === 'order-requests' && (
+  <>
+    <div className={`bg-white rounded-2xl shadow-lg p-6 border-l-4 ${currentColors?.accent}`}>
+      <h2 className="font-semibold mb-4 text-gray-800">Order Invoice Log</h2>
+      <div className="grid grid-cols-2 gap-4">
+        <InputField label="Date Entered" type="date" value={forms['order-requests'].date_entered} onChange={e => updateForm('order-requests', 'date_entered', e.target.value)} />
+        <InputField label="Vendor" value={forms['order-requests'].vendor} onChange={e => updateForm('order-requests', 'vendor', e.target.value)} />
+        <InputField label="Invoice Number" value={forms['order-requests'].invoice_number} onChange={e => updateForm('order-requests', 'invoice_number', e.target.value)} />
+        <InputField label="Invoice Date" type="date" value={forms['order-requests'].invoice_date} onChange={e => updateForm('order-requests', 'invoice_date', e.target.value)} />
+        <InputField label="Due Date" type="date" value={forms['order-requests'].due_date} onChange={e => updateForm('order-requests', 'due_date', e.target.value)} />
+        <InputField label="Amount" prefix="$" value={forms['order-requests'].amount} onChange={e => updateForm('order-requests', 'amount', e.target.value)} />
+      </div>
+      <div className="mt-4">
+        <InputField label="Notes" large value={forms['order-requests'].notes} onChange={e => updateForm('order-requests', 'notes', e.target.value)} />
+      </div>
+    </div>
+    <div className="bg-white rounded-2xl shadow-lg p-6">
+      <FileUpload label="Order Invoices / POs" files={files['order-requests'].orderInvoices} onFilesChange={f => updateFiles('order-requests', 'orderInvoices', f)} onViewFile={setViewingFile} />
+    </div>
+  </>
+)}
 
-              {activeModule === 'refund-requests' && (
-                <>
-                  <div className={`bg-white rounded-2xl shadow-lg p-6 border-l-4 ${currentColors?.accent}`}>
-                    <h2 className="font-semibold mb-4 text-gray-800">Refund Request</h2>
-                    <div className="grid grid-cols-2 gap-4">
-                      <InputField label="Patient Name" value={forms['refund-requests'].patient_name} onChange={e => updateForm('refund-requests', 'patient_name', e.target.value)} />
-                      <InputField label="Chart Number" value={forms['refund-requests'].chart_number} onChange={e => updateForm('refund-requests', 'chart_number', e.target.value)} />
-                      <InputField label="Date of Request" type="date" value={forms['refund-requests'].date_of_request} onChange={e => updateForm('refund-requests', 'date_of_request', e.target.value)} />
-                      <InputField label="Type" value={forms['refund-requests'].type} onChange={e => updateForm('refund-requests', 'type', e.target.value)} options={['Refund', 'Credit', 'Adjustment']} />
-                      <InputField label="Amount Requested" prefix="$" value={forms['refund-requests'].amount_requested} onChange={e => updateForm('refund-requests', 'amount_requested', e.target.value)} />
-                      <InputField label="Status" value={forms['refund-requests'].status} onChange={e => updateForm('refund-requests', 'status', e.target.value)} options={['Pending', 'Approved', 'Completed', 'Denied']} />
-                    </div>
-                  </div>
-                  <div className="bg-white rounded-2xl shadow-lg p-6">
-                    <h2 className="font-semibold mb-4 text-gray-800 flex items-center gap-2">
-                      <File className="w-5 h-5 text-rose-500" />Documents
-                    </h2>
-                    <FileUpload label="Supporting Documentation" files={files['refund-requests'].documentation} onFilesChange={f => updateFiles('refund-requests', 'documentation', f)} onViewFile={setViewingFile} />
-                  </div>
-                </>
-              )}
+ {activeModule === 'refund-requests' && (
+  <>
+    <div className={`bg-white rounded-2xl shadow-lg p-6 border-l-4 ${currentColors?.accent}`}>
+      <h2 className="font-semibold mb-4 text-gray-800">Patient Refund Request Log</h2>
+      <div className="grid grid-cols-2 gap-4">
+        <InputField label="Patient Name" value={forms['refund-requests'].patient_name} onChange={e => updateForm('refund-requests', 'patient_name', e.target.value)} />
+        <InputField label="Chart Number" value={forms['refund-requests'].chart_number} onChange={e => updateForm('refund-requests', 'chart_number', e.target.value)} />
+        <InputField label="Parent Name" value={forms['refund-requests'].parent_name} onChange={e => updateForm('refund-requests', 'parent_name', e.target.value)} />
+        <InputField label="RP Address" value={forms['refund-requests'].rp_address} onChange={e => updateForm('refund-requests', 'rp_address', e.target.value)} />
+        <InputField label="Date of Request" type="date" value={forms['refund-requests'].date_of_request} onChange={e => updateForm('refund-requests', 'date_of_request', e.target.value)} />
+        <InputField label="Type Transaction" value={forms['refund-requests'].type} onChange={e => updateForm('refund-requests', 'type', e.target.value)} options={REFUND_TYPES} />
+        <InputField label="Amount Requested" prefix="$" value={forms['refund-requests'].amount_requested} onChange={e => updateForm('refund-requests', 'amount_requested', e.target.value)} />
+        <InputField label="Best Contact Method" value={forms['refund-requests'].best_contact_method} onChange={e => updateForm('refund-requests', 'best_contact_method', e.target.value)} options={CONTACT_METHODS} />
+        <InputField label="eAssist Audited" value={forms['refund-requests'].eassist_audited} onChange={e => updateForm('refund-requests', 'eassist_audited', e.target.value)} options={['Yes', 'No', 'N/A']} />
+        <InputField label="Status" value={forms['refund-requests'].status} onChange={e => updateForm('refund-requests', 'status', e.target.value)} options={['Pending', 'Approved', 'Completed', 'Denied']} />
+      </div>
+      <div className="mt-4">
+        <InputField label="Description" large value={forms['refund-requests'].description} onChange={e => updateForm('refund-requests', 'description', e.target.value)} />
+      </div>
+    </div>
+    <div className="bg-white rounded-2xl shadow-lg p-6">
+      <FileUpload label="Supporting Documentation" files={files['refund-requests'].documentation} onFilesChange={f => updateFiles('refund-requests', 'documentation', f)} onViewFile={setViewingFile} />
+    </div>
+  </>
+)}
 
               <button
                 onClick={() => saveEntry(activeModule)}
