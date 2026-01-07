@@ -1507,12 +1507,13 @@ if (!currentUser) {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                 </svg>
               )}
-            </button>
+            </button> 
+              /*SEASION ONLY FOR 30DAYS*/
             <label 
               onClick={() => setRememberMe(!rememberMe)}
               className="text-sm text-gray-600 cursor-pointer select-none"
             >
-              Stay logged in /*SEASION ONLY FOR 30DAYS*/
+              Stay logged in 
             </label>
           </div>
           
