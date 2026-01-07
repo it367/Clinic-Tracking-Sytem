@@ -1508,7 +1508,7 @@ if (!currentUser) {
                 </svg>
               )}
             </button> 
-              /*SEASION ONLY FOR 30DAYS*/
+{/*SEASION ONLY FOR 30DAYS*/}
             <label 
               onClick={() => setRememberMe(!rememberMe)}
               className="text-sm text-gray-600 cursor-pointer select-none"
