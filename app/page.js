@@ -32,6 +32,7 @@ const INQUIRY_TYPES = ['Refund', 'Balance', 'Insurance', 'Payment Plan', 'Other'
 const REFUND_TYPES = ['Refund', 'Credit', 'Adjustment'];
 const CONTACT_METHODS = ['Phone', 'Email', 'Text'];
 const DATE_RANGES = ['This Week', 'Last 2 Weeks', 'This Month', 'Last Month', 'This Quarter', 'This Year', 'Custom'];
+const RECON_STATUSES = ['Pending', 'Accounted', 'Rejected'];
 
 function canEditRecord(createdAt) {
   const now = new Date();
@@ -202,9 +203,11 @@ function StatusBadge({ status }) {
     'Approved': 'bg-blue-100 text-blue-700 border-blue-200',
     'Completed': 'bg-emerald-100 text-emerald-700 border-emerald-200',
     'Paid': 'bg-emerald-100 text-emerald-700 border-emerald-200',
-    'Denied': 'bg-red-100 text-red-700 border-red-200'
+    'Denied': 'bg-red-100 text-red-700 border-red-200',
+    'Accounted': 'bg-emerald-100 text-emerald-700 border-emerald-200',
+    'Rejected': 'bg-red-100 text-red-700 border-red-200'
   };
-  return <span className={`px-2.5 py-1 rounded-lg text-xs font-semibold border ${colors[status] || 'bg-gray-100 text-gray-600 border-gray-200'}`}>{status || 'N/A'}</span>;
+  return <span className={`px-2.5 py-1 rounded-lg text-xs font-semibold border ${colors[status] || 'bg-gray-100 text-gray-600 border-gray-200'}`}>{status || 'Pending'}</span>;
 }
 
 function FloatingChat({ messages, input, setInput, onSend, loading, userRole }) {
@@ -328,6 +331,8 @@ export default function ClinicSystem() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [adminLocation, setAdminLocation] = useState('all');
   const [editingStatus, setEditingStatus] = useState(null);
+  const [editingRecon, setEditingRecon] = useState(null);
+const [reconForm, setReconForm] = useState({});
   const [editingEntry, setEditingEntry] = useState(null);
   const [documents, setDocuments] = useState([]);
   const [docSearch, setDocSearch] = useState('');
