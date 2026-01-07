@@ -336,6 +336,10 @@ const [reconForm, setReconForm] = useState({});
   const [editingEntry, setEditingEntry] = useState(null);
   const [documents, setDocuments] = useState([]);
   const [docSearch, setDocSearch] = useState('');
+  const [recordSearch, setRecordSearch] = useState('');
+const [sortOrder, setSortOrder] = useState('desc');
+const [recordsPerPage, setRecordsPerPage] = useState(20);
+const [currentPage, setCurrentPage] = useState(1);
 const [nameForm, setNameForm] = useState('');
 
   const [showAddUser, setShowAddUser] = useState(false);
@@ -400,6 +404,8 @@ useEffect(() => { if (currentUser) setNameForm(currentUser.name || ''); }, [curr
     }
   }, [currentUser, selectedLocation, activeModule, adminLocation]);
 
+useEffect(() => { setCurrentPage(1); setRecordSearch(''); }, [activeModule, adminLocation]);  
+  
   const isAdmin = currentUser?.role === 'super_admin' || currentUser?.role === 'finance_admin';
   const isSuperAdmin = currentUser?.role === 'super_admin';
 
@@ -1170,7 +1176,61 @@ const updateReconForm = (entryId, field, value) => {
     }
   };
 
-  const getModuleEntries = () => moduleData[activeModule] || [];
+const getModuleEntries = () => {
+  let data = moduleData[activeModule] || [];
+  
+  // Apply search filter
+  if (recordSearch.trim()) {
+    const search = recordSearch.toLowerCase();
+    data = data.filter(e => {
+      // Search across common fields
+      const searchableFields = [
+        e.recon_date,
+        e.patient_name,
+        e.vendor,
+        e.chart_number,
+        e.parent_name,
+        e.description,
+        e.description_of_issue,
+        e.invoice_number,
+        e.requester_name,
+        e.device_system,
+        e.notes,
+        e.result,
+        e.locations?.name,
+        e.creator?.name,
+        e.status,
+        e.ticket_number?.toString(),
+        e.inquiry_type,
+        e.type,
+        e.urgency
+      ];
+      return searchableFields.some(field => field?.toLowerCase()?.includes(search));
+    });
+  }
+  
+  // Apply date sorting
+  data = [...data].sort((a, b) => {
+    const dateA = new Date(a.created_at);
+    const dateB = new Date(b.created_at);
+    return sortOrder === 'desc' ? dateB - dateA : dateA - dateB;
+  });
+  
+  return data;
+};
+
+const getPaginatedEntries = () => {
+  const allEntries = getModuleEntries();
+  if (recordsPerPage === 'all') return allEntries;
+  const startIndex = (currentPage - 1) * recordsPerPage;
+  return allEntries.slice(startIndex, startIndex + recordsPerPage);
+};
+
+const getTotalPages = () => {
+  const allEntries = getModuleEntries();
+  if (recordsPerPage === 'all') return 1;
+  return Math.ceil(allEntries.length / recordsPerPage);
+};
   const currentColors = MODULE_COLORS[activeModule];
   const currentModule = ALL_MODULES.find(m => m.id === activeModule);
 
@@ -1685,204 +1745,236 @@ const updateReconForm = (entryId, field, value) => {
   </div>
 )}
 
-     {/* Records View - Admin */}
+{/* Records View - Admin */}
 {isAdmin && adminView === 'records' && (
-  <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
-    <div className="flex items-center justify-between mb-4">
-      <h2 className="font-semibold text-gray-800">All Records</h2>
-      <span className={`text-sm font-medium px-3 py-1 rounded-lg ${currentColors?.light} ${currentColors?.text}`}>{entries.length} entries</span>
+  <div className="space-y-4">
+    {/* Filters and Controls */}
+    <div className="bg-white rounded-2xl shadow-lg p-4 border border-gray-100">
+      <div className="flex flex-wrap items-center gap-4">
+        {/* Search */}
+        <div className="flex-1 min-w-[200px]">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              value={recordSearch}
+              onChange={e => { setRecordSearch(e.target.value); setCurrentPage(1); }}
+              placeholder="Search records..."
+              className="w-full pl-10 pr-4 py-2.5 border-2 border-gray-200 rounded-xl text-sm focus:border-blue-400 outline-none transition-all"
+            />
+            {recordSearch && (
+              <button onClick={() => setRecordSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        </div>
+        
+        {/* Date Sort */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-500 font-medium">Sort:</span>
+          <select
+            value={sortOrder}
+            onChange={e => setSortOrder(e.target.value)}
+            className="px-3 py-2.5 border-2 border-gray-200 rounded-xl text-sm focus:border-blue-400 outline-none bg-white"
+          >
+            <option value="desc">Newest First</option>
+            <option value="asc">Oldest First</option>
+          </select>
+        </div>
+        
+        {/* Records Per Page */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-500 font-medium">Show:</span>
+          <select
+            value={recordsPerPage}
+            onChange={e => { setRecordsPerPage(e.target.value === 'all' ? 'all' : parseInt(e.target.value)); setCurrentPage(1); }}
+            className="px-3 py-2.5 border-2 border-gray-200 rounded-xl text-sm focus:border-blue-400 outline-none bg-white"
+          >
+            <option value={5}>5</option>
+            <option value={10}>10</option>
+            <option value={20}>20</option>
+            <option value={50}>50</option>
+            <option value="all">All</option>
+          </select>
+        </div>
+      </div>
+      
+      {/* Results Summary */}
+      <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100">
+        <p className="text-sm text-gray-500">
+          Showing <span className="font-semibold text-gray-700">{getPaginatedEntries().length}</span> of <span className="font-semibold text-gray-700">{getModuleEntries().length}</span> records
+          {recordSearch && <span className="text-blue-600"> (filtered)</span>}
+        </p>
+        <span className={`text-sm font-medium px-3 py-1 rounded-lg ${currentColors?.light} ${currentColors?.text}`}>
+          {currentModule?.name}
+        </span>
+      </div>
     </div>
-    {loading ? (
-      <div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-gray-400" /></div>
-    ) : entries.length === 0 ? (
-      <p className="text-gray-500 text-center py-8">No entries yet</p>
-    ) : (
-      <div className="space-y-3">
-        {entries.slice(0, 50).map(e => {
-          const docKey = `${activeModule}-${e.id}`;
-          const docs = entryDocuments[docKey] || [];
-          
-          if (!entryDocuments[docKey]) {
-            loadEntryDocuments(activeModule, e.id);
-          }
-          
-          // Special handling for Daily Recon
-          if (activeModule === 'daily-recon') {
-            const isEditing = editingRecon === e.id;
-            const form = reconForm[e.id] || {};
+
+    {/* Records List */}
+    <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
+      {loading ? (
+        <div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-gray-400" /></div>
+      ) : getModuleEntries().length === 0 ? (
+        <div className="text-center py-12">
+          <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <FileText className="w-8 h-8 text-gray-400" />
+          </div>
+          <p className="text-gray-500">{recordSearch ? 'No records match your search' : 'No entries yet'}</p>
+          {recordSearch && (
+            <button onClick={() => setRecordSearch('')} className="mt-2 text-blue-600 text-sm font-medium hover:underline">Clear search</button>
+          )}
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {getPaginatedEntries().map(e => {
+            const docKey = `${activeModule}-${e.id}`;
+            const docs = entryDocuments[docKey] || [];
             
-            return (
-              <div key={e.id} className={`p-4 rounded-xl border-2 ${e.status === 'Accounted' ? 'border-emerald-200 bg-emerald-50' : e.status === 'Rejected' ? 'border-red-200 bg-red-50' : 'border-amber-200 bg-amber-50'} hover:shadow-md transition-all`}>
-                <div className="flex justify-between items-start gap-4 mb-4">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="font-semibold text-gray-800">{e.recon_date}</p>
-                      <StatusBadge status={e.status || 'Pending'} />
+            if (!entryDocuments[docKey]) {
+              loadEntryDocuments(activeModule, e.id);
+            }
+            
+            // Special handling for Daily Recon
+            if (activeModule === 'daily-recon') {
+              const isEditing = editingRecon === e.id;
+              const form = reconForm[e.id] || {};
+              
+              return (
+                <div key={e.id} className={`p-4 rounded-xl border-2 ${e.status === 'Accounted' ? 'border-emerald-200 bg-emerald-50' : e.status === 'Rejected' ? 'border-red-200 bg-red-50' : 'border-amber-200 bg-amber-50'} hover:shadow-md transition-all`}>
+                  <div className="flex justify-between items-start gap-4 mb-4">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-semibold text-gray-800">{e.recon_date}</p>
+                        <StatusBadge status={e.status || 'Pending'} />
+                      </div>
+                      <p className="text-sm text-gray-600 mt-1">
+                        {e.locations?.name} • {e.creator?.name || 'Unknown'} • {new Date(e.created_at).toLocaleDateString()}
+                      </p>
                     </div>
-                    <p className="text-sm text-gray-600 mt-1">
-                      {e.locations?.name} • {e.creator?.name || 'Unknown'} • {new Date(e.created_at).toLocaleDateString()}
-                    </p>
+                    {!isEditing && (
+                      <button
+                        onClick={() => startEditingRecon(e)}
+                        className="px-3 py-1.5 text-sm font-medium text-purple-600 hover:bg-purple-100 rounded-lg transition-colors flex items-center gap-1"
+                      >
+                        <Edit3 className="w-4 h-4" /> Review
+                      </button>
+                    )}
                   </div>
-                  {!isEditing && (
-                    <button
-                      onClick={() => startEditingRecon(e)}
-                      className="px-3 py-1.5 text-sm font-medium text-purple-600 hover:bg-purple-100 rounded-lg transition-colors flex items-center gap-1"
-                    >
-                      <Edit3 className="w-4 h-4" /> Review
-                    </button>
-                  )}
-                </div>
 
-                {/* Staff's Cash Can Data (Read Only) */}
-                <div className="bg-white rounded-xl p-4 mb-3 border border-gray-200">
-                  <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
-                    <DollarSign className="w-4 h-4 text-emerald-500" /> Staff Daily Cash Can
-                  </h4>
-                  <div className="grid grid-cols-4 gap-3 text-sm">
-                    <div><span className="text-gray-500">Cash:</span> <span className="font-medium">${Number(e.cash || 0).toFixed(2)}</span></div>
-                    <div><span className="text-gray-500">Credit Card:</span> <span className="font-medium">${Number(e.credit_card || 0).toFixed(2)}</span></div>
-                    <div><span className="text-gray-500">Checks OTC:</span> <span className="font-medium">${Number(e.checks_otc || 0).toFixed(2)}</span></div>
-                    <div><span className="text-gray-500">Insurance:</span> <span className="font-medium">${Number(e.insurance_checks || 0).toFixed(2)}</span></div>
-                    <div><span className="text-gray-500">Care Credit:</span> <span className="font-medium">${Number(e.care_credit || 0).toFixed(2)}</span></div>
-                    <div><span className="text-gray-500">VCC:</span> <span className="font-medium">${Number(e.vcc || 0).toFixed(2)}</span></div>
-                    <div><span className="text-gray-500">EFTs:</span> <span className="font-medium">${Number(e.efts || 0).toFixed(2)}</span></div>
-                    <div><span className="text-gray-500 font-semibold">Total:</span> <span className="font-bold text-emerald-600">${Number(e.total_collected || 0).toFixed(2)}</span></div>
-                  </div>
-                  {e.notes && <p className="mt-2 text-sm text-gray-600"><span className="text-gray-500">Notes:</span> {e.notes}</p>}
-                </div>
-
-                {/* Bank Deposit Section (Editable by Admin) */}
-                {isEditing ? (
-                  <div className="bg-blue-50 rounded-xl p-4 border border-blue-200">
-                    <h4 className="text-sm font-semibold text-blue-700 mb-3 flex items-center gap-2">
-                      <Building2 className="w-4 h-4" /> Bank Deposit (Admin Entry)
+                  {/* Staff's Cash Can Data (Read Only) */}
+                  <div className="bg-white rounded-xl p-4 mb-3 border border-gray-200">
+                    <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                      <DollarSign className="w-4 h-4 text-emerald-500" /> Staff Daily Cash Can
                     </h4>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-                      <div>
-                        <label className="text-xs text-gray-600 mb-1 block">Cash</label>
-                        <div className="flex items-center border-2 border-gray-200 rounded-lg bg-white">
-                          <span className="pl-2 text-gray-400">$</span>
-                          <input type="text" value={form.deposit_cash || ''} onChange={e => updateReconForm(e.id, 'deposit_cash', e.target.value)} className="w-full p-2 outline-none rounded-lg" inputMode="decimal" />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="text-xs text-gray-600 mb-1 block">Credit Card</label>
-                        <div className="flex items-center border-2 border-gray-200 rounded-lg bg-white">
-                          <span className="pl-2 text-gray-400">$</span>
-                          <input type="text" value={form.deposit_credit_card || ''} onChange={ev => updateReconForm(e.id, 'deposit_credit_card', ev.target.value)} className="w-full p-2 outline-none rounded-lg" inputMode="decimal" />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="text-xs text-gray-600 mb-1 block">Checks</label>
-                        <div className="flex items-center border-2 border-gray-200 rounded-lg bg-white">
-                          <span className="pl-2 text-gray-400">$</span>
-                          <input type="text" value={form.deposit_checks || ''} onChange={ev => updateReconForm(e.id, 'deposit_checks', ev.target.value)} className="w-full p-2 outline-none rounded-lg" inputMode="decimal" />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="text-xs text-gray-600 mb-1 block">Insurance</label>
-                        <div className="flex items-center border-2 border-gray-200 rounded-lg bg-white">
-                          <span className="pl-2 text-gray-400">$</span>
-                          <input type="text" value={form.deposit_insurance || ''} onChange={ev => updateReconForm(e.id, 'deposit_insurance', ev.target.value)} className="w-full p-2 outline-none rounded-lg" inputMode="decimal" />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="text-xs text-gray-600 mb-1 block">Care Credit</label>
-                        <div className="flex items-center border-2 border-gray-200 rounded-lg bg-white">
-                          <span className="pl-2 text-gray-400">$</span>
-                          <input type="text" value={form.deposit_care_credit || ''} onChange={ev => updateReconForm(e.id, 'deposit_care_credit', ev.target.value)} className="w-full p-2 outline-none rounded-lg" inputMode="decimal" />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="text-xs text-gray-600 mb-1 block">VCC</label>
-                        <div className="flex items-center border-2 border-gray-200 rounded-lg bg-white">
-                          <span className="pl-2 text-gray-400">$</span>
-                          <input type="text" value={form.deposit_vcc || ''} onChange={ev => updateReconForm(e.id, 'deposit_vcc', ev.target.value)} className="w-full p-2 outline-none rounded-lg" inputMode="decimal" />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="text-xs text-gray-600 mb-1 block">EFTs</label>
-                        <div className="flex items-center border-2 border-gray-200 rounded-lg bg-white">
-                          <span className="pl-2 text-gray-400">$</span>
-                          <input type="text" value={form.deposit_efts || ''} onChange={ev => updateReconForm(e.id, 'deposit_efts', ev.target.value)} className="w-full p-2 outline-none rounded-lg" inputMode="decimal" />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="text-xs text-gray-600 mb-1 block">Status</label>
-                        <select value={form.status || 'Pending'} onChange={ev => updateReconForm(e.id, 'status', ev.target.value)} className="w-full p-2 border-2 border-gray-200 rounded-lg bg-white">
-                          {RECON_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-                        </select>
-                      </div>
+                    <div className="grid grid-cols-4 gap-3 text-sm">
+                      <div><span className="text-gray-500">Cash:</span> <span className="font-medium">${Number(e.cash || 0).toFixed(2)}</span></div>
+                      <div><span className="text-gray-500">Credit Card:</span> <span className="font-medium">${Number(e.credit_card || 0).toFixed(2)}</span></div>
+                      <div><span className="text-gray-500">Checks OTC:</span> <span className="font-medium">${Number(e.checks_otc || 0).toFixed(2)}</span></div>
+                      <div><span className="text-gray-500">Insurance:</span> <span className="font-medium">${Number(e.insurance_checks || 0).toFixed(2)}</span></div>
+                      <div><span className="text-gray-500">Care Credit:</span> <span className="font-medium">${Number(e.care_credit || 0).toFixed(2)}</span></div>
+                      <div><span className="text-gray-500">VCC:</span> <span className="font-medium">${Number(e.vcc || 0).toFixed(2)}</span></div>
+                      <div><span className="text-gray-500">EFTs:</span> <span className="font-medium">${Number(e.efts || 0).toFixed(2)}</span></div>
+                      <div><span className="text-gray-500 font-semibold">Total:</span> <span className="font-bold text-emerald-600">${Number(e.total_collected || 0).toFixed(2)}</span></div>
                     </div>
-                    <div className="flex gap-2">
-                      <button onClick={() => updateDailyRecon(e.id)} className="flex-1 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-lg font-medium hover:shadow-lg transition-all">
-                        Submit Review
-                      </button>
-                      <button onClick={() => { setEditingRecon(null); }} className="px-4 py-2.5 bg-gray-200 rounded-lg font-medium hover:bg-gray-300 transition-all">
-                        Cancel
-                      </button>
-                    </div>
+                    {e.notes && <p className="mt-2 text-sm text-gray-600"><span className="text-gray-500">Notes:</span> {e.notes}</p>}
                   </div>
-                ) : (
-                  // Show existing bank deposit data if any
-                  (e.deposit_cash > 0 || e.deposit_credit_card > 0 || e.deposit_checks > 0 || e.status === 'Accounted') && (
+
+                  {/* Bank Deposit Section (Editable by Admin) */}
+                  {isEditing ? (
                     <div className="bg-blue-50 rounded-xl p-4 border border-blue-200">
                       <h4 className="text-sm font-semibold text-blue-700 mb-3 flex items-center gap-2">
-                        <Building2 className="w-4 h-4" /> Bank Deposit (Reviewed)
+                        <Building2 className="w-4 h-4" /> Bank Deposit (Admin Entry)
                       </h4>
-                      <div className="grid grid-cols-4 gap-3 text-sm">
-                        <div><span className="text-gray-500">Cash:</span> <span className="font-medium">${Number(e.deposit_cash || 0).toFixed(2)}</span></div>
-                        <div><span className="text-gray-500">Credit Card:</span> <span className="font-medium">${Number(e.deposit_credit_card || 0).toFixed(2)}</span></div>
-                        <div><span className="text-gray-500">Checks:</span> <span className="font-medium">${Number(e.deposit_checks || 0).toFixed(2)}</span></div>
-                        <div><span className="text-gray-500">Insurance:</span> <span className="font-medium">${Number(e.deposit_insurance || 0).toFixed(2)}</span></div>
-                        <div><span className="text-gray-500">Care Credit:</span> <span className="font-medium">${Number(e.deposit_care_credit || 0).toFixed(2)}</span></div>
-                        <div><span className="text-gray-500">VCC:</span> <span className="font-medium">${Number(e.deposit_vcc || 0).toFixed(2)}</span></div>
-                        <div><span className="text-gray-500">EFTs:</span> <span className="font-medium">${Number(e.deposit_efts || 0).toFixed(2)}</span></div>
-                        <div><span className="text-gray-500 font-semibold">Total:</span> <span className="font-bold text-blue-600">${Number(e.total_deposit || 0).toFixed(2)}</span></div>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                        <div>
+                          <label className="text-xs text-gray-600 mb-1 block">Cash</label>
+                          <div className="flex items-center border-2 border-gray-200 rounded-lg bg-white">
+                            <span className="pl-2 text-gray-400">$</span>
+                            <input type="text" value={form.deposit_cash || ''} onChange={ev => updateReconForm(e.id, 'deposit_cash', ev.target.value)} className="w-full p-2 outline-none rounded-lg" inputMode="decimal" />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="text-xs text-gray-600 mb-1 block">Credit Card</label>
+                          <div className="flex items-center border-2 border-gray-200 rounded-lg bg-white">
+                            <span className="pl-2 text-gray-400">$</span>
+                            <input type="text" value={form.deposit_credit_card || ''} onChange={ev => updateReconForm(e.id, 'deposit_credit_card', ev.target.value)} className="w-full p-2 outline-none rounded-lg" inputMode="decimal" />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="text-xs text-gray-600 mb-1 block">Checks</label>
+                          <div className="flex items-center border-2 border-gray-200 rounded-lg bg-white">
+                            <span className="pl-2 text-gray-400">$</span>
+                            <input type="text" value={form.deposit_checks || ''} onChange={ev => updateReconForm(e.id, 'deposit_checks', ev.target.value)} className="w-full p-2 outline-none rounded-lg" inputMode="decimal" />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="text-xs text-gray-600 mb-1 block">Insurance</label>
+                          <div className="flex items-center border-2 border-gray-200 rounded-lg bg-white">
+                            <span className="pl-2 text-gray-400">$</span>
+                            <input type="text" value={form.deposit_insurance || ''} onChange={ev => updateReconForm(e.id, 'deposit_insurance', ev.target.value)} className="w-full p-2 outline-none rounded-lg" inputMode="decimal" />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="text-xs text-gray-600 mb-1 block">Care Credit</label>
+                          <div className="flex items-center border-2 border-gray-200 rounded-lg bg-white">
+                            <span className="pl-2 text-gray-400">$</span>
+                            <input type="text" value={form.deposit_care_credit || ''} onChange={ev => updateReconForm(e.id, 'deposit_care_credit', ev.target.value)} className="w-full p-2 outline-none rounded-lg" inputMode="decimal" />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="text-xs text-gray-600 mb-1 block">VCC</label>
+                          <div className="flex items-center border-2 border-gray-200 rounded-lg bg-white">
+                            <span className="pl-2 text-gray-400">$</span>
+                            <input type="text" value={form.deposit_vcc || ''} onChange={ev => updateReconForm(e.id, 'deposit_vcc', ev.target.value)} className="w-full p-2 outline-none rounded-lg" inputMode="decimal" />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="text-xs text-gray-600 mb-1 block">EFTs</label>
+                          <div className="flex items-center border-2 border-gray-200 rounded-lg bg-white">
+                            <span className="pl-2 text-gray-400">$</span>
+                            <input type="text" value={form.deposit_efts || ''} onChange={ev => updateReconForm(e.id, 'deposit_efts', ev.target.value)} className="w-full p-2 outline-none rounded-lg" inputMode="decimal" />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="text-xs text-gray-600 mb-1 block">Status</label>
+                          <select value={form.status || 'Pending'} onChange={ev => updateReconForm(e.id, 'status', ev.target.value)} className="w-full p-2 border-2 border-gray-200 rounded-lg bg-white">
+                            {RECON_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button onClick={() => updateDailyRecon(e.id)} className="flex-1 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-lg font-medium hover:shadow-lg transition-all">
+                          Submit Review
+                        </button>
+                        <button onClick={() => { setEditingRecon(null); }} className="px-4 py-2.5 bg-gray-200 rounded-lg font-medium hover:bg-gray-300 transition-all">
+                          Cancel
+                        </button>
                       </div>
                     </div>
-                  )
-                )}
-
-                {/* Documents */}
-                {docs.length > 0 && (
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {docs.map(doc => (
-                      <div key={doc.id} className="flex items-center gap-1 bg-white px-2 py-1 rounded-lg border text-xs">
-                        <File className="w-3 h-3 text-gray-400" />
-                        <span className="text-gray-600 max-w-24 truncate">{doc.file_name}</span>
-                        <button onClick={() => viewDocument(doc)} className="p-0.5 text-blue-500 hover:bg-blue-100 rounded" title="Preview">
-                          <Eye className="w-3 h-3" />
-                        </button>
-                        <button onClick={() => downloadDocument(doc)} className="p-0.5 text-emerald-500 hover:bg-emerald-100 rounded" title="Download">
-                          <Download className="w-3 h-3" />
-                        </button>
+                  ) : (
+                    // Show existing bank deposit data if any
+                    (e.deposit_cash > 0 || e.deposit_credit_card > 0 || e.deposit_checks > 0 || e.status === 'Accounted') && (
+                      <div className="bg-blue-50 rounded-xl p-4 border border-blue-200">
+                        <h4 className="text-sm font-semibold text-blue-700 mb-3 flex items-center gap-2">
+                          <Building2 className="w-4 h-4" /> Bank Deposit (Reviewed)
+                        </h4>
+                        <div className="grid grid-cols-4 gap-3 text-sm">
+                          <div><span className="text-gray-500">Cash:</span> <span className="font-medium">${Number(e.deposit_cash || 0).toFixed(2)}</span></div>
+                          <div><span className="text-gray-500">Credit Card:</span> <span className="font-medium">${Number(e.deposit_credit_card || 0).toFixed(2)}</span></div>
+                          <div><span className="text-gray-500">Checks:</span> <span className="font-medium">${Number(e.deposit_checks || 0).toFixed(2)}</span></div>
+                          <div><span className="text-gray-500">Insurance:</span> <span className="font-medium">${Number(e.deposit_insurance || 0).toFixed(2)}</span></div>
+                          <div><span className="text-gray-500">Care Credit:</span> <span className="font-medium">${Number(e.deposit_care_credit || 0).toFixed(2)}</span></div>
+                          <div><span className="text-gray-500">VCC:</span> <span className="font-medium">${Number(e.deposit_vcc || 0).toFixed(2)}</span></div>
+                          <div><span className="text-gray-500">EFTs:</span> <span className="font-medium">${Number(e.deposit_efts || 0).toFixed(2)}</span></div>
+                          <div><span className="text-gray-500 font-semibold">Total:</span> <span className="font-bold text-blue-600">${Number(e.total_deposit || 0).toFixed(2)}</span></div>
+                        </div>
                       </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          }
-          
-          // Default handling for other modules
-          return (
-            <div key={e.id} className={`p-4 rounded-xl border-2 ${currentColors?.border} ${currentColors?.bg} hover:shadow-md transition-all`}>
-              <div className="flex justify-between items-start gap-4">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <p className="font-semibold text-gray-800">
-                      {e.ticket_number ? `IT-${e.ticket_number}` : e.patient_name || e.vendor || e.recon_date || e.created_at?.split('T')[0]}
-                    </p>
-                    <StatusBadge status={e.status} />
-                  </div>
-                  <p className="text-sm text-gray-600 mt-1">
-                    {e.locations?.name} • {e.creator?.name || 'Unknown'} • {new Date(e.created_at).toLocaleDateString()}
-                  </p>
-                  {e.description_of_issue && <p className="text-sm text-gray-600 mt-2 line-clamp-2">{e.description_of_issue}</p>}
-                  {e.total_collected && <p className="text-lg font-bold text-emerald-600 mt-2">${Number(e.total_collected).toFixed(2)}</p>}
-                  
-                  {/* Documents for this entry */}
+                    )
+                  )}
+
+                  {/* Documents */}
                   {docs.length > 0 && (
                     <div className="mt-3 flex flex-wrap gap-2">
                       {docs.map(doc => (
@@ -1900,41 +1992,146 @@ const updateReconForm = (entryId, field, value) => {
                     </div>
                   )}
                 </div>
-
-                {activeModule === 'it-requests' && (
-                  <div>
-                    {editingStatus === e.id ? (
-                      <div className="space-y-2 w-44">
-                        <select defaultValue={e.status} id={`status-${e.id}`} className="w-full p-2 border-2 rounded-lg text-sm">
-                          {IT_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-                        </select>
-                        <input type="text" id={`notes-${e.id}`} placeholder="Resolution notes" className="w-full p-2 border-2 rounded-lg text-sm" />
-                        <div className="flex gap-1">
-                          <button
-                            onClick={() => updateEntryStatus('it-requests', e.id, document.getElementById(`status-${e.id}`).value, { resolution_notes: document.getElementById(`notes-${e.id}`).value })}
-                            className="flex-1 py-2 bg-emerald-500 text-white rounded-lg text-xs font-medium"
-                          >
-                            Save
-                          </button>
-                          <button onClick={() => setEditingStatus(null)} className="px-3 py-2 bg-gray-200 rounded-lg text-xs">Cancel</button>
-                        </div>
+              );
+            }
+            
+            // Default handling for other modules
+            return (
+              <div key={e.id} className={`p-4 rounded-xl border-2 ${currentColors?.border} ${currentColors?.bg} hover:shadow-md transition-all`}>
+                <div className="flex justify-between items-start gap-4">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="font-semibold text-gray-800">
+                        {e.ticket_number ? `IT-${e.ticket_number}` : e.patient_name || e.vendor || e.recon_date || e.created_at?.split('T')[0]}
+                      </p>
+                      <StatusBadge status={e.status} />
+                    </div>
+                    <p className="text-sm text-gray-600 mt-1">
+                      {e.locations?.name} • {e.creator?.name || 'Unknown'} • {new Date(e.created_at).toLocaleDateString()}
+                    </p>
+                    {e.description && <p className="text-sm text-gray-600 mt-2 line-clamp-2">{e.description}</p>}
+                    {e.description_of_issue && <p className="text-sm text-gray-600 mt-2 line-clamp-2">{e.description_of_issue}</p>}
+                    {(e.amount || e.amount_requested || e.amount_in_question) && (
+                      <p className="text-lg font-bold text-emerald-600 mt-2">
+                        ${Number(e.amount || e.amount_requested || e.amount_in_question || 0).toFixed(2)}
+                      </p>
+                    )}
+                    
+                    {/* Documents for this entry */}
+                    {docs.length > 0 && (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {docs.map(doc => (
+                          <div key={doc.id} className="flex items-center gap-1 bg-white px-2 py-1 rounded-lg border text-xs">
+                            <File className="w-3 h-3 text-gray-400" />
+                            <span className="text-gray-600 max-w-24 truncate">{doc.file_name}</span>
+                            <button onClick={() => viewDocument(doc)} className="p-0.5 text-blue-500 hover:bg-blue-100 rounded" title="Preview">
+                              <Eye className="w-3 h-3" />
+                            </button>
+                            <button onClick={() => downloadDocument(doc)} className="p-0.5 text-emerald-500 hover:bg-emerald-100 rounded" title="Download">
+                              <Download className="w-3 h-3" />
+                            </button>
+                          </div>
+                        ))}
                       </div>
-                    ) : (
-                      <button onClick={() => setEditingStatus(e.id)} className="text-xs text-purple-600 flex items-center gap-1 font-medium hover:underline">
-                        <Edit3 className="w-3 h-3" />Update
-                      </button>
                     )}
                   </div>
-                )}
+
+                  {activeModule === 'it-requests' && (
+                    <div>
+                      {editingStatus === e.id ? (
+                        <div className="space-y-2 w-44">
+                          <select defaultValue={e.status} id={`status-${e.id}`} className="w-full p-2 border-2 rounded-lg text-sm">
+                            {IT_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                          </select>
+                          <input type="text" id={`notes-${e.id}`} placeholder="Resolution notes" className="w-full p-2 border-2 rounded-lg text-sm" />
+                          <div className="flex gap-1">
+                            <button
+                              onClick={() => updateEntryStatus('it-requests', e.id, document.getElementById(`status-${e.id}`).value, { resolution_notes: document.getElementById(`notes-${e.id}`).value })}
+                              className="flex-1 py-2 bg-emerald-500 text-white rounded-lg text-xs font-medium"
+                            >
+                              Save
+                            </button>
+                            <button onClick={() => setEditingStatus(null)} className="px-3 py-2 bg-gray-200 rounded-lg text-xs">Cancel</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button onClick={() => setEditingStatus(e.id)} className="text-xs text-purple-600 flex items-center gap-1 font-medium hover:underline">
+                          <Edit3 className="w-3 h-3" />Update
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
+            );
+          })}
+        </div>
+      )}
+      
+      {/* Pagination Controls */}
+      {!loading && getModuleEntries().length > 0 && recordsPerPage !== 'all' && getTotalPages() > 1 && (
+        <div className="flex items-center justify-between mt-6 pt-4 border-t border-gray-100">
+          <p className="text-sm text-gray-500">
+            Page {currentPage} of {getTotalPages()}
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setCurrentPage(1)}
+              disabled={currentPage === 1}
+              className="px-3 py-2 text-sm font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            >
+              First
+            </button>
+            <button
+              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+              disabled={currentPage === 1}
+              className="px-3 py-2 text-sm font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            >
+              Previous
+            </button>
+            <div className="flex items-center gap-1">
+              {Array.from({ length: Math.min(5, getTotalPages()) }, (_, i) => {
+                let pageNum;
+                if (getTotalPages() <= 5) {
+                  pageNum = i + 1;
+                } else if (currentPage <= 3) {
+                  pageNum = i + 1;
+                } else if (currentPage >= getTotalPages() - 2) {
+                  pageNum = getTotalPages() - 4 + i;
+                } else {
+                  pageNum = currentPage - 2 + i;
+                }
+                return (
+                  <button
+                    key={pageNum}
+                    onClick={() => setCurrentPage(pageNum)}
+                    className={`w-10 h-10 text-sm font-medium rounded-lg transition-all ${currentPage === pageNum ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg' : 'text-gray-600 bg-gray-100 hover:bg-gray-200'}`}
+                  >
+                    {pageNum}
+                  </button>
+                );
+              })}
             </div>
-          );
-        })}
-      </div>
-    )}
+            <button
+              onClick={() => setCurrentPage(prev => Math.min(prev + 1, getTotalPages()))}
+              disabled={currentPage === getTotalPages()}
+              className="px-3 py-2 text-sm font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            >
+              Next
+            </button>
+            <button
+              onClick={() => setCurrentPage(getTotalPages())}
+              disabled={currentPage === getTotalPages()}
+              className="px-3 py-2 text-sm font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            >
+              Last
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   </div>
 )}
-
           {/* Entry Form - Staff */}
           {!isAdmin && view === 'entry' && (
             <div className="space-y-4">
