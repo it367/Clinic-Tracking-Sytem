@@ -748,17 +748,20 @@ const loadLoginHistory = async (userId) => {
   
 const handleLogin = async () => {
   if (!loginEmail || !loginPassword) {
-    showMessage('error', 'Please enter email and password');
+    showMessage('error', 'Please enter email/username and password');
     return;
   }
 
   setLoginLoading(true);
   
   try {
+    // Try to find user by email OR username
+    const loginValue = loginEmail.toLowerCase().trim();
+    
     const { data: user, error: userError } = await supabase
       .from('users')
       .select('*')
-      .eq('email', loginEmail.toLowerCase())
+      .or(`email.eq.${loginValue},username.eq.${loginValue}`)
       .eq('password_hash', loginPassword)
       .eq('is_active', true)
       .maybeSingle();
