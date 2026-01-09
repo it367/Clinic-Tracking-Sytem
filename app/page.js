@@ -2895,8 +2895,8 @@ if (!currentUser) {
                         </div>
 ) : (
                         <div className="flex items-center gap-2">
-                          <button onClick={() => setViewingEntry(e)} className="p-1.5 text-gray-500 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors" title="Preview">
-                            <Eye className="w-4 h-4" />
+                          <button onClick={() => setViewingEntry(e)} className="text-xs text-purple-600 flex items-center gap-1 font-medium hover:underline">
+                            <Eye className="w-3 h-3" />Preview
                           </button>
                           <button onClick={() => setEditingStatus(e.id)} className="text-xs text-purple-600 flex items-center gap-1 font-medium hover:underline">
                             <Edit3 className="w-3 h-3" />Update
