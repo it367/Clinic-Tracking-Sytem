@@ -2683,9 +2683,9 @@ if (!currentUser) {
                     </div>
 {!isEditing && (
                       <div className="flex items-center gap-1">
-                        <button onClick={() => setViewingEntry(e)} className="p-2 text-gray-500 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors" title="Preview">
-                          <Eye className="w-4 h-4" /> Preview
-                        </button>
+                      <button onClick={() => setViewingEntry(e)} className="text-sm font-medium text-gray-500 hover:text-purple-600 flex items-center gap-1">
+                        <Eye className="w-4 h-4" /> Preview
+                      </button>
                         <button
                           onClick={() => startEditingRecon(e)}
                           className="px-3 py-1.5 text-sm font-medium text-purple-600 hover:bg-purple-100 rounded-lg transition-colors flex items-center gap-1"
@@ -3389,7 +3389,7 @@ if (!currentUser) {
                     </div>
                     
 <div className="flex items-center gap-1">
-                      <button onClick={() => setViewingEntry(e)} className="p-2 text-gray-500 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors" title="Preview">
+                      <button onClick={() => setViewingEntry(e)} className="text-sm font-medium text-gray-500 hover:text-purple-600 flex items-center gap-1">
                         <Eye className="w-4 h-4" /> Preview
                       </button>
                       {canEdit && (
