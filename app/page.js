@@ -839,17 +839,14 @@ const loadItUsers = async () => {
   const { data, error } = await supabase
     .from('users')
     .select('id, name')
-    .in('role', ['it', 'super_admin'])
+    .eq('role', 'it')
     .eq('is_active', true)
     .order('name');
   
   if (error) {
     console.error('Error loading IT users:', error);
   }
-  if (data) {
-    console.log('Loaded IT users:', data);
-    setItUsers(data);
-  }
+  if (data) setItUsers(data);
 };
   
   const loadUsers = async () => {
