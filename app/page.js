@@ -786,6 +786,13 @@ useEffect(() => { if (currentUser) setNameForm(currentUser.name || ''); }, [curr
 
 useEffect(() => { setCurrentPage(1); setRecordSearch(''); }, [activeModule, adminLocation]);
   useEffect(() => { setStaffCurrentPage(1); setStaffRecordSearch(''); setEditingStaffEntry(null); }, [activeModule, selectedLocation]);
+
+  useEffect(() => {
+  if (viewingEntry && activeModule === 'it-requests') {
+    loadItUsers();
+  }
+}, [viewingEntry]);
+  
 // Load data when analytics module changes
 useEffect(() => {
   const userIsAdmin = currentUser?.role === 'super_admin' || currentUser?.role === 'finance_admin';
@@ -829,13 +836,20 @@ const showConfirm = (title, message, confirmText = 'Confirm', confirmColor = 'bl
   };
 
 const loadItUsers = async () => {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('users')
     .select('id, name')
     .in('role', ['it', 'super_admin'])
     .eq('is_active', true)
     .order('name');
-  if (data) setItUsers(data);
+  
+  if (error) {
+    console.error('Error loading IT users:', error);
+  }
+  if (data) {
+    console.log('Loaded IT users:', data);
+    setItUsers(data);
+  }
 };
   
   const loadUsers = async () => {
