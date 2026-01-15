@@ -823,7 +823,7 @@ const loadItUsers = async () => {
   const { data } = await supabase
     .from('users')
     .select('id, name')
-    .in('role', ['super_admin', 'it'])
+    .eq('role', 'it')
     .eq('is_active', true)
     .order('name');
   if (data) setItUsers(data);
