@@ -1,4 +1,4 @@
-//Clinic Management System v0.35
+//Clinic Management System v0.40
 // Devoloper: Mark Murillo 
 // Company: Kidshine Hawaii
 
@@ -522,7 +522,7 @@ const [loadingUserSessions, setLoadingUserSessions] = useState(false);
 const [staffSortOrder, setStaffSortOrder] = useState('desc');
 const [staffRecordsPerPage, setStaffRecordsPerPage] = useState(20);
 const [staffCurrentPage, setStaffCurrentPage] = useState(1);
-
+const [confirmDialog, setConfirmDialog] = useState({ open: false, title: '', message: '', onConfirm: null, onCancel: null, confirmText: 'Confirm', confirmColor: 'blue' });
   const [showAddUser, setShowAddUser] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
   const [newUser, setNewUser] = useState({ name: '', username: '', email: '', password: '', role: 'staff', locations: [] });
@@ -684,6 +684,26 @@ useEffect(() => {
   const isAdmin = currentUser?.role === 'super_admin' || currentUser?.role === 'finance_admin';
   const isSuperAdmin = currentUser?.role === 'super_admin';
 
+const showConfirm = (title, message, confirmText = 'Confirm', confirmColor = 'blue') => {
+  return new Promise((resolve) => {
+    setConfirmDialog({
+      open: true,
+      title,
+      message,
+      confirmText,
+      confirmColor,
+      onConfirm: () => {
+        setConfirmDialog(prev => ({ ...prev, open: false }));
+        resolve(true);
+      },
+      onCancel: () => {
+        setConfirmDialog(prev => ({ ...prev, open: false }));
+        resolve(false);
+      }
+    });
+  });
+};
+  
   const showMessage = (type, text) => {
     setMessage({ type, text });
     setTimeout(() => setMessage({ type: '', text: '' }), 4000);
@@ -1056,7 +1076,8 @@ const addUser = async () => {
     return;
   }
 
-  if (!window.confirm(`Are you sure you want to create user "${newUser.name}"?`)) return;
+ const confirmed = await showConfirm('Create User', `Are you sure you want to create user "${newUser.name}"?`, 'Create', 'green');
+if (!confirmed) return;
 
   // Check if username already exists
   const { data: existingUser } = await supabase
@@ -1109,7 +1130,8 @@ const updateUser = async () => {
     return;
   }
 
-  if (!window.confirm(`Are you sure you want to update user "${editingUser.name}"?`)) return;
+const confirmed = await showConfirm('Update User', `Are you sure you want to update user "${editingUser.name}"?`, 'Update', 'blue');
+if (!confirmed) return;
 
   // Check if username is taken by another user (if username provided)
   if (editingUser.username) {
@@ -1165,7 +1187,8 @@ const updateUser = async () => {
 };
 
 const deleteUser = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this user?')) return;
+    const confirmed = await showConfirm('Delete User', 'Are you sure you want to delete this user? This action cannot be undone.', 'Delete', 'red');
+    if (!confirmed) return;
     
     const { error } = await supabase
       .from('users')
@@ -1193,7 +1216,8 @@ const deleteUser = async (id) => {
   };
 
 const changePassword = async () => {
-    if (!window.confirm('Are you sure you want to change your password?')) return;
+const confirmed = await showConfirm('Change Password', 'Are you sure you want to change your password?', 'Change', 'blue');
+if (!confirmed) return;
     if (pwdForm.current !== currentUser.password_hash) {
       showMessage('error', 'Current password is incorrect');
       return;
@@ -1227,7 +1251,8 @@ const changeName = async () => {
     showMessage('error', 'Name cannot be empty');
     return;
   }
-  if (!window.confirm('Are you sure you want to update your display name?')) return;
+  const confirmed = await showConfirm('Update Name', 'Are you sure you want to update your display name?', 'Update', 'blue');
+if (!confirmed) return;
   
   const { error } = await supabase
     .from('users')
@@ -1301,7 +1326,8 @@ const changeName = async () => {
   };
 
 const saveEntry = async (moduleId) => {
-    if (!window.confirm('Are you sure you want to submit this entry?')) return;
+    const confirmed = await showConfirm('Submit Entry', 'Are you sure you want to submit this entry?', 'Submit', 'green');
+    if (!confirmed) return;;
     setSaving(true);
     const module = ALL_MODULES.find(m => m.id === moduleId);
     const form = forms[moduleId];
@@ -1440,7 +1466,8 @@ if (moduleId === 'daily-recon') {
 
 const updateDailyRecon = async (entryId) => {
   if (!reconForm[entryId]) return;
-  if (!window.confirm('Are you sure you want to update this Daily Recon entry?')) return;
+const confirmed = await showConfirm('Update Daily Recon', 'Are you sure you want to update this Daily Recon entry?', 'Update', 'green');
+if (!confirmed) return;
   
   const form = reconForm[entryId];
   const updateData = {
@@ -1505,7 +1532,8 @@ const updateReconForm = (entryId, field, value) => {
 };
   
 const updateEntryStatus = async (moduleId, entryId, newStatus, additionalFields = {}) => {
-    if (!window.confirm(`Are you sure you want to update the status to "${newStatus}"?`)) return;
+const confirmed = await showConfirm('Update Status', `Are you sure you want to update the status to "${newStatus}"?`, 'Update', 'blue');
+if (!confirmed) return;
     const module = ALL_MODULES.find(m => m.id === moduleId);
 
     const updateData = {
@@ -1778,7 +1806,8 @@ const updateStaffEditForm = (field, value) => {
 
 const saveStaffEntryUpdate = async () => {
   if (!editingStaffEntry) return;
-  if (!window.confirm('Are you sure you want to save these changes?')) return;
+ const confirmed = await showConfirm('Save Changes', 'Are you sure you want to save these changes?', 'Save', 'green');
+if (!confirmed) return;;
   setSaving(true);
   
   const module = ALL_MODULES.find(m => m.id === activeModule);
@@ -2036,9 +2065,49 @@ if (!currentUser) {
   // MAIN DASHBOARD
   const entries = getModuleEntries();
 
-  return (
+return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-slate-100 flex">
+      {/* Confirmation Dialog */}
+      {confirmDialog.open && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4" onClick={confirmDialog.onCancel}>
+          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
+            <div className="p-6">
+              <div className={`w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4 ${
+                confirmDialog.confirmColor === 'red' ? 'bg-red-100' : 
+                confirmDialog.confirmColor === 'green' ? 'bg-emerald-100' : 'bg-amber-100'
+              }`}>
+                <AlertCircle className={`w-7 h-7 ${
+                  confirmDialog.confirmColor === 'red' ? 'text-red-600' : 
+                  confirmDialog.confirmColor === 'green' ? 'text-emerald-600' : 'text-amber-600'
+                }`} />
+              </div>
+              <h3 className="text-xl font-bold text-center text-gray-800 mb-2">{confirmDialog.title}</h3>
+              <p className="text-center text-gray-600">{confirmDialog.message}</p>
+            </div>
+            <div className="flex border-t border-gray-200">
+              <button 
+                onClick={confirmDialog.onCancel} 
+                className="flex-1 py-4 text-gray-600 font-semibold hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={confirmDialog.onConfirm} 
+                className={`flex-1 py-4 text-white font-semibold transition-all ${
+                  confirmDialog.confirmColor === 'red' ? 'bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700' :
+                  confirmDialog.confirmColor === 'green' ? 'bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700' :
+                  'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700'
+                }`}
+              >
+                {confirmDialog.confirmText}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <FileViewer file={viewingFile} onClose={() => setViewingFile(null)} />
+
+        
     <EntryPreview entry={viewingEntry} module={currentModule} onClose={() => setViewingEntry(null)} colors={currentColors} onViewDocument={viewDocument} />
       <FloatingChat messages={chatMessages} input={chatInput} setInput={setChatInput} onSend={askAI} loading={aiLoading} userRole={currentUser?.role} />
 
