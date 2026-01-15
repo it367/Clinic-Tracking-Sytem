@@ -35,6 +35,15 @@ const REFUND_TYPES = ['Refund', 'Credit', 'Adjustment'];
 const CONTACT_METHODS = ['Phone', 'Email', 'Text'];
 const DATE_RANGES = ['This Week', 'Last 2 Weeks', 'This Month', 'Last Month', 'This Quarter', 'This Year', 'Custom'];
 const RECON_STATUSES = ['Pending', 'Accounted', 'Rejected'];
+const formatRole = (role) => {
+  const roleMap = {
+    'it': 'IT',
+    'staff': 'Staff',
+    'super_admin': 'Super Admin',
+    'finance_admin': 'Finance Admin'
+  };
+  return roleMap[role] || role;
+};
 
 function canEditRecord(createdAt) {
   const now = new Date();
@@ -823,7 +832,7 @@ const loadItUsers = async () => {
   const { data } = await supabase
     .from('users')
     .select('id, name')
-    .eq('role', 'it')
+    .in('role', ['it', 'super_admin'])
     .eq('is_active', true)
     .order('name');
   if (data) setItUsers(data);
@@ -2249,7 +2258,7 @@ return (
             <div className="text-white">
               <p className="font-semibold">{currentUser.name}</p>
 <p className="text-sm text-white/80">
-  {currentUser?.role === 'it' ? 'IT Admin' : isSuperAdmin ? 'Super Admin' : isAdmin ? 'Finance Admin' : selectedLocation}
+  {isAdmin || currentUser?.role === 'it' ? formatRole(currentUser?.role) : selectedLocation}
 </p>
             </div>
           </div>
@@ -2488,7 +2497,7 @@ return (
             </div>
             <div>
               <p className="font-medium text-gray-800">{u.name}</p>
-              <p className="text-sm text-gray-500">{u.username && <span className="text-blue-600">@{u.username} • </span>}{u.email} • <span className="capitalize">{u.role?.replace('_', ' ')}</span></p>
+             <p className="text-sm text-gray-500">{u.username && <span className="text-blue-600">@{u.username} • </span>}{u.email} • {formatRole(u.role)}</p>
               {u.role === 'staff' && (
                 <div className="flex flex-wrap gap-1 mt-1">
                   {u.locations?.map(loc => (
