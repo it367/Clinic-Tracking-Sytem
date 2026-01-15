@@ -717,11 +717,11 @@ useEffect(() => {
         }
         setLastLogin(sessionData.lastLogin);
 // Load users if admin and set default view
-if (sessionData.user.role === 'super_admin' || sessionData.user.role === 'finance_admin') {
-          loadUsers();
-          loadItUsers();
-          setAdminView('analytics'); // Default to analytics for admins
-        }
+if (sessionData.user.role === 'super_admin' || sessionData.user.role === 'finance_admin' || sessionData.user.role === 'it') {
+  loadUsers();
+  loadItUsers();
+  setAdminView('analytics');
+}
       }
     } catch (e) {
       console.error('Failed to restore session:', e);
