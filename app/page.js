@@ -3732,35 +3732,30 @@ const totalDeposited = filteredData.reduce((sum, r) => {
                       </p>
                     )}
                     
-                    {/* Documents for this entry */}
-                    {docs.length > 0 && (
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        {docs.map(doc => (
-                          <div key={doc.id} className="flex items-center gap-1 bg-white px-2 py-1 rounded-lg border text-xs">
-                            <File className="w-3 h-3 text-gray-400" />
-                            <span className="text-gray-600 max-w-24 truncate">{doc.file_name}</span>
-                            <button onClick={() => viewDocument(doc)} className="p-0.5 text-blue-500 hover:bg-blue-100 rounded" title="Preview">
-                              <Eye className="w-3 h-3" />
-                            </button>
-                            <button onClick={() => downloadDocument(doc)} className="p-0.5 text-emerald-500 hover:bg-emerald-100 rounded" title="Download">
-                              <Download className="w-3 h-3" />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-{activeModule !== 'it-requests' && (
-                    <button onClick={() => setViewingEntry(e)} className="p-2 text-gray-500 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors" title="Preview">
-                      <Eye className="w-4 h-4" />
-                    </button>
+                  {/* Documents */}
+                  {docs.length > 0 && (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {docs.map(doc => (
+                        <div key={doc.id} className="flex items-center gap-1 bg-white px-2 py-1 rounded-lg border text-xs">
+                          <File className="w-3 h-3 text-gray-400" />
+                          <span className="text-gray-600 max-w-24 truncate">{doc.file_name}</span>
+                          <button onClick={() => viewDocument(doc)} className="p-0.5 text-blue-500 hover:bg-blue-100 rounded" title="Preview">
+                            <Eye className="w-3 h-3" />
+                          </button>
+                          <button onClick={() => downloadDocument(doc)} className="p-0.5 text-emerald-500 hover:bg-emerald-100 rounded" title="Download">
+                            <Download className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
                   )}
                 </div>
-              </div>
-            );
-          })}
-  return (
+              );
+            }
+
+            // IT Requests - clickable card
+            if (activeModule === 'it-requests') {
+              return (
     <div 
       key={e.id}
       className={`p-4 rounded-xl border-2 ${currentColors?.border} ${currentColors?.bg} hover:shadow-md transition-all cursor-pointer`}
