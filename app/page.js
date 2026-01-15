@@ -1228,7 +1228,7 @@ const changeName = async () => {
     return;
   }
   if (!window.confirm('Are you sure you want to update your display name?')) return;
-  }
+  
   const { error } = await supabase
     .from('users')
     .update({ name: nameForm.trim(), updated_by: currentUser.id })
