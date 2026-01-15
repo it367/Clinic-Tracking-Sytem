@@ -3756,7 +3756,9 @@ const totalDeposited = filteredData.reduce((sum, r) => {
                       <Eye className="w-4 h-4" />
                     </button>
                   )}
-
+            </div>
+          );
+        }
 // IT Requests - clickable card
 if (activeModule === 'it-requests') {
   return (
