@@ -3940,7 +3940,8 @@ return (
                         {e.locations?.name} • {e.creator?.name || 'Unknown'} • {new Date(e.created_at).toLocaleDateString()}
                       </p>
                     </div>
-{!isEditing && (
+                  </div>
+                    {!isEditing && (
                       <div className="flex items-center gap-1">
                         <button onClick={() => setViewingEntry(e)} className="p-2 text-gray-500 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors" title="Preview"><Eye className="w-4 h-4" /></button>
                         <button onClick={() => startEditingRecon(e)} className="p-2 text-purple-600 hover:bg-purple-100 rounded-lg transition-colors" title="Review"><Edit3 className="w-4 h-4" /></button>
