@@ -2770,7 +2770,7 @@ return (
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-h-screen">
 <header className="bg-white shadow-sm border-b sticky top-0 z-30">
-          <div className="flex items-center justify-between px-4 py-3 min-h-[60px]">
+        <div className="flex items-center justify-between px-4 py-2 min-h-[70px]">
             <div className="flex items-center gap-3">
               <button onClick={() => setSidebarOpen(!sidebarOpen)} className="lg:hidden p-2 hover:bg-gray-100 rounded-xl"><Menu className="w-5 h-5" /></button>
               <div>
@@ -2782,7 +2782,7 @@ return (
 </div>
             <div className="flex items-center gap-4">
               {loading && <Loader2 className="w-5 h-5 animate-spin text-gray-400" />}
-            <img src="/kidshine.png" alt="KidShine Hawaii" className="h-11 w-auto max-w-[180px] hidden sm:block object-contain" />
+           <img src="/kidshine.png" alt="KidShine Hawaii" className="h-14 w-44 hidden sm:block object-contain" />
             </div>
           </div>
 
