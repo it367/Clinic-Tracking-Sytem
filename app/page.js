@@ -490,6 +490,62 @@ function StatusBadge({ status }) {
   return <span className={`px-2.5 py-1 rounded-lg text-xs font-semibold border ${colors[status] || 'bg-gray-100 text-gray-600 border-gray-200'}`}>{status || 'Pending'}</span>;
 }
 
+// Simple markdown renderer for chat messages
+function renderMarkdown(text) {
+  if (!text) return null;
+  
+  const lines = text.split('\n');
+  const elements = [];
+  let key = 0;
+  
+  lines.forEach((line) => {
+    let processedLine = line;
+    
+    // Convert **bold** to <strong>
+    processedLine = processedLine.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    
+    // Convert *italic* to <em>
+    processedLine = processedLine.replace(/\*(.+?)\*/g, '<em>$1</em>');
+    
+    // Check if line is a bullet point
+    const bulletMatch = line.match(/^(\s*)-\s+(.+)$/);
+    const numberMatch = line.match(/^(\s*)(\d+)\.\s+(.+)$/);
+    
+    if (bulletMatch) {
+      const indent = bulletMatch[1].length;
+      const content = bulletMatch[2]
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.+?)\*/g, '<em>$1</em>');
+      elements.push(
+        <div key={key++} className="flex gap-2" style={{ paddingLeft: `${indent * 8}px` }}>
+          <span className="text-gray-400">•</span>
+          <span dangerouslySetInnerHTML={{ __html: content }} />
+        </div>
+      );
+    } else if (numberMatch) {
+      const indent = numberMatch[1].length;
+      const num = numberMatch[2];
+      const content = numberMatch[3]
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.+?)\*/g, '<em>$1</em>');
+      elements.push(
+        <div key={key++} className="flex gap-2" style={{ paddingLeft: `${indent * 8}px` }}>
+          <span className="text-gray-500 font-medium">{num}.</span>
+          <span dangerouslySetInnerHTML={{ __html: content }} />
+        </div>
+      );
+    } else if (processedLine.trim() === '') {
+      elements.push(<div key={key++} className="h-2" />);
+    } else {
+      elements.push(
+        <div key={key++} dangerouslySetInnerHTML={{ __html: processedLine }} />
+      );
+    }
+  });
+  
+  return <div className="space-y-1">{elements}</div>;
+}
+
 function FloatingChat({ messages, input, setInput, onSend, loading, userRole }) {
   const [isOpen, setIsOpen] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -499,7 +555,7 @@ function FloatingChat({ messages, input, setInput, onSend, loading, userRole }) 
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const isAdmin = userRole === 'super_admin' || userRole === 'finance_admin';
+  const isAdmin = userRole === 'super_admin' || userRole === 'finance_admin' || userRole === 'it';
 
   const chatSize = isExpanded 
     ? 'w-[600px] h-[700px]' 
@@ -546,7 +602,11 @@ function FloatingChat({ messages, input, setInput, onSend, loading, userRole }) 
             {messages.map((msg, i) => (
               <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                 <div className={`max-w-[85%] p-3 rounded-2xl text-sm ${msg.role === 'user' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-br-md' : 'bg-white border border-gray-200 shadow-sm rounded-bl-md'}`}>
-                  <pre className="whitespace-pre-wrap font-sans">{msg.content}</pre>
+                  {msg.role === 'user' ? (
+                    <span>{msg.content}</span>
+                  ) : (
+                    renderMarkdown(msg.content)
+                  )}
                 </div>
               </div>
             ))}
