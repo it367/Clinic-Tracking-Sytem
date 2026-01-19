@@ -2827,7 +2827,7 @@ return (
         </div>
       )}
 
-        <main className="flex-1 p-4 max-w-4xl mx-auto w-full pb-24">
+        <main className="flex-1 p-4 max-w-4xl mx-auto w-full pb-24 relative z-20 bg-gradient-to-br from-gray-50 to-slate-100">
           {/* ADMIN: User Management */}
           {isAdmin && adminView === 'users' && (
             <div className="space-y-4">
@@ -4983,7 +4983,7 @@ if (activeModule === 'it-requests') {
 {sidebarOpen && <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-30 lg:hidden" onClick={() => setSidebarOpen(false)} />}
       
 {/* Version Footer */}
-      <div className="fixed bottom-6 left-4 lg:left-[310px] -z-1 pointer-events-none">
+      <div className="fixed bottom-6 left-4 lg:left-[310px] z-10 pointer-events-none">
         <p className="text-xs text-gray-400 opacity-70">CMS v0.46</p>
       </div>
     </div>
