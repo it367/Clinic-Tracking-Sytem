@@ -2141,12 +2141,12 @@ const deleteSelectedDocuments = async (selectedDocs) => {
 } catch (err) {
     console.error('ZIP creation error:', err);
     showMessage('error', 'Failed to create ZIP file');
-  } finally {
+} finally {
     setDownloadingZip(false);
   }
 };
 
-const getDocumentUrl = async (storagePath) => {
+const getModuleEntries = () => {
   let data = moduleData[activeModule] || [];
   
   // Apply search filter
