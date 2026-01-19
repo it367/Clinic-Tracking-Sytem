@@ -718,7 +718,7 @@ const [confirmDialog, setConfirmDialog] = useState({ open: false, title: '', mes
 const [passwordDialog, setPasswordDialog] = useState({ open: false, title: '', message: '', onConfirm: null, onCancel: null, password: '', error: '' });
 const [selectedRecords, setSelectedRecords] = useState([]);
 const [selectAll, setSelectAll] = useState(false);
-const [selectedRecords, setSelectedRecords] = useState([]);
+  const [showAddUser, setShowAddUser] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
   const [newUser, setNewUser] = useState({ name: '', username: '', email: '', password: '', role: 'staff', locations: [] });
 
