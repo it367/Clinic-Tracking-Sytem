@@ -4,6 +4,7 @@
 
 'use client';
 import { useState, useEffect, useRef } from 'react';
+import JSZip from 'jszip';
 import { supabase } from '../lib/supabase';
 import { DollarSign, FileText, Building2, Bot, Send, Loader2, LogOut, User, Upload, X, File, Shield, Receipt, CreditCard, Package, RefreshCw, Monitor, Menu, Eye, EyeOff, FolderOpen, Edit3, Users, Plus, Trash2, Lock, Download, Settings, MessageCircle, Sparkles, AlertCircle, Maximize2, Minimize2, Headphones, Search, TrendingUp, TrendingDown, Calendar, PieChart, BarChart3 } from 'lucide-react';
 const MODULES = [
@@ -720,6 +721,7 @@ const [selectedRecords, setSelectedRecords] = useState([]);
 const [selectAll, setSelectAll] = useState(false);
 const [selectedDocuments, setSelectedDocuments] = useState([]);
 const [docSelectAll, setDocSelectAll] = useState(false);
+const [downloadingZip, setDownloadingZip] = useState(false);
   const [showAddUser, setShowAddUser] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
   const [newUser, setNewUser] = useState({ name: '', username: '', email: '', password: '', role: 'staff', locations: [] });
@@ -2052,8 +2054,99 @@ const deleteSelectedDocuments = async (selectedDocs) => {
   showMessage(errorCount > 0 ? 'error' : 'success', errorCount > 0 ? `Deleted ${successCount} documents. ${errorCount} failed.` : `✓ ${successCount} document(s) deleted successfully`);
   loadDocuments();
 };
-  
-const getModuleEntries = () => {
+
+  const downloadSelectedDocuments = async (selectedDocs) => {
+  if (selectedDocs.length === 0) {
+    showMessage('error', 'No documents selected');
+    return;
+  }
+
+  if (selectedDocs.length === 1) {
+    // Just download single file directly
+    await downloadDocument(selectedDocs[0]);
+    return;
+  }
+
+  setDownloadingZip(true);
+  showMessage('success', `Preparing ${selectedDocs.length} files for download...`);
+
+  try {
+    const zip = new JSZip();
+    let successCount = 0;
+    let errorCount = 0;
+
+    // Track filenames to handle duplicates
+    const fileNameCounts = {};
+
+    for (const doc of selectedDocs) {
+      try {
+        const url = await getDocumentUrl(doc.storage_path);
+        if (url) {
+          const response = await fetch(url);
+          if (response.ok) {
+            const blob = await response.blob();
+            
+            // Handle duplicate filenames
+            let fileName = doc.file_name;
+            if (fileNameCounts[fileName]) {
+              const ext = fileName.lastIndexOf('.') > -1 ? fileName.substring(fileName.lastIndexOf('.')) : '';
+              const baseName = fileName.lastIndexOf('.') > -1 ? fileName.substring(0, fileName.lastIndexOf('.')) : fileName;
+              fileName = `${baseName} (${fileNameCounts[fileName]})${ext}`;
+              fileNameCounts[doc.file_name]++;
+            } else {
+              fileNameCounts[fileName] = 1;
+            }
+            
+            zip.file(fileName, blob);
+            successCount++;
+          } else {
+            errorCount++;
+          }
+        } else {
+          errorCount++;
+        }
+      } catch (err) {
+        console.error('Error fetching document:', doc.file_name, err);
+        errorCount++;
+      }
+    }
+
+    if (successCount === 0) {
+      showMessage('error', 'Failed to download any documents');
+      return;
+    }
+
+    // Generate ZIP file
+    const zipBlob = await zip.generateAsync({ 
+      type: 'blob',
+      compression: 'DEFLATE',
+      compressionOptions: { level: 6 }
+    });
+
+    // Create download link
+    const downloadUrl = URL.createObjectURL(zipBlob);
+    const a = document.createElement('a');
+    a.href = downloadUrl;
+    a.download = `documents_${new Date().toISOString().split('T')[0]}.zip`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(downloadUrl);
+
+    if (errorCount > 0) {
+      showMessage('success', `✓ Downloaded ${successCount} files. ${errorCount} failed.`);
+    } else {
+      showMessage('success', `✓ Downloaded ${successCount} files as ZIP`);
+    }
+} catch (err) {
+    console.error('ZIP creation error:', err);
+    showMessage('error', 'Failed to create ZIP file');
+  } finally {
+    setDownloadingZip(false);
+  }
+};
+
+const getDocumentUrl = async (storagePath) => {
   let data = moduleData[activeModule] || [];
   
   // Apply search filter
@@ -3693,17 +3786,35 @@ const totalDeposited = filteredData.reduce((sum, r) => {
               <span className="text-sm text-purple-600 font-medium">{selectedDocuments.length} selected</span>
             )}
           </div>
-          {selectedDocuments.length > 0 && (
-            <button
-              onClick={() => {
-                deleteSelectedDocuments(selectedDocuments);
-                setSelectedDocuments([]);
-                setDocSelectAll(false);
-              }}
-              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-red-500 to-rose-600 text-white rounded-lg text-sm font-medium hover:shadow-lg transition-all"
-            >
-              <Trash2 className="w-4 h-4" /> Delete Selected ({selectedDocuments.length})
-            </button>
+{selectedDocuments.length > 0 && (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => downloadSelectedDocuments(selectedDocuments)}
+                disabled={downloadingZip}
+                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-lg text-sm font-medium hover:shadow-lg transition-all disabled:opacity-50"
+              >
+                {downloadingZip ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" /> Preparing ZIP...
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-4 h-4" /> Download as ZIP ({selectedDocuments.length})
+                  </>
+                )}
+              </button>
+              <button
+                onClick={() => {
+                  deleteSelectedDocuments(selectedDocuments);
+                  setSelectedDocuments([]);
+                  setDocSelectAll(false);
+                }}
+                disabled={downloadingZip}
+                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-red-500 to-rose-600 text-white rounded-lg text-sm font-medium hover:shadow-lg transition-all disabled:opacity-50"
+              >
+                <Trash2 className="w-4 h-4" /> Delete Selected ({selectedDocuments.length})
+              </button>
+            </div>
           )}
         </div>
       )}
