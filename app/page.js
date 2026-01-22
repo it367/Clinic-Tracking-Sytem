@@ -1184,7 +1184,7 @@ const [analyticsModule, setAnalyticsModule] = useState('daily-recon');
   const [forms, setForms] = useState({
     'daily-recon': { recon_date: today, cash: '', credit_card: '', checks_otc: '', insurance_checks: '', care_credit: '', vcc: '', efts: '', deposit_cash: '', deposit_credit_card: '', deposit_checks: '', deposit_insurance: '', deposit_care_credit: '', deposit_vcc: '', deposit_efts: '', notes: '', entered_by: '' },
     'billing-inquiry': { patient_name: '', chart_number: '', parent_name: '', date_of_request: today, inquiry_type: '', description: '', amount_in_question: '', best_contact_method: '', best_contact_time: '', billing_team_reviewed: '', date_reviewed: '', status: 'Pending', result: '' },
-'bills-payment': { bill_date: today, vendor: '', transaction_id: '', description: '', amount: '', due_date: '' },
+'bills-payment': { bill_date: today, vendor: '', transaction_id: '', description: '', amount: '', due_date: '', status: 'Pending' },,
     'order-requests': { date_entered: today, vendor: '', invoice_number: '', invoice_date: '', due_date: '', amount: '', entered_by: '', notes: '' },
   'refund-requests': { patient_name: '', chart_number: '', parent_name: '', rp_address: '', date_of_request: today, type: '', description: '', amount_requested: '', best_contact_method: '', contact_info: '', eassist_audited: '', status: 'Pending' },
    'it-requests': { date_reported: today, urgency: '', requester_name: '', device_system: '', description_of_issue: '', best_contact_method: '', best_contact_time: '', assigned_to: '', status: 'Open', resolution_notes: '', completed_by: '' }
@@ -2169,7 +2169,7 @@ if (moduleId === 'daily-recon') {
     description: form.description,
     amount: parseFloat(form.amount) || 0,
     due_date: form.due_date || null,
-    status: 'Pending'
+    status: form.status || 'Pending'
   };
 } else if (moduleId === 'order-requests') {
   entryData = {
@@ -2798,7 +2798,8 @@ const getTotalPages = () => {
       vendor: entry.vendor || '',
       description: entry.description || '',
       amount: entry.amount || '',
-      due_date: entry.due_date || ''
+      due_date: entry.due_date || '',
+      status: entry.status || 'Pending'
     });
   } else if (activeModule === 'order-requests') {
     setStaffEditForm({
@@ -2880,7 +2881,8 @@ if (!confirmed) return;;
       vendor: staffEditForm.vendor,
       description: staffEditForm.description,
       amount: parseFloat(staffEditForm.amount) || 0,
-      due_date: staffEditForm.due_date || null
+      due_date: staffEditForm.due_date || null,
+      status: staffEditForm.status || 'Pending'
     };
   } else if (activeModule === 'order-requests') {
     updateData = { ...updateData,
@@ -5401,7 +5403,8 @@ if (activeModule === 'it-requests') {
         <InputField label="Vendor" value={forms['bills-payment'].vendor} onChange={e => updateForm('bills-payment', 'vendor', e.target.value)} />
         <InputField label="Bill Date" type="date" value={forms['bills-payment'].bill_date} onChange={e => updateForm('bills-payment', 'bill_date', e.target.value)} />
         <InputField label="Amount" prefix="$" value={forms['bills-payment'].amount} onChange={e => updateForm('bills-payment', 'amount', e.target.value)} />
-        <InputField label="Due Date" type="date" value={forms['bills-payment'].due_date} onChange={e => updateForm('bills-payment', 'due_date', e.target.value)} />
+<InputField label="Due Date" type="date" value={forms['bills-payment'].due_date} onChange={e => updateForm('bills-payment', 'due_date', e.target.value)} />
+        <InputField label="Status" value={forms['bills-payment'].status} onChange={e => updateForm('bills-payment', 'status', e.target.value)} options={['Pending', 'Paid', 'Rejected']} />
       </div>
       <div className="mt-4">
         <InputField label="Description (Bill Details)" large value={forms['bills-payment'].description} onChange={e => updateForm('bills-payment', 'description', e.target.value)} />
@@ -5621,6 +5624,7 @@ if (activeModule === 'it-requests') {
                         <InputField label="Bill Date" type="date" value={staffEditForm.bill_date} onChange={ev => updateStaffEditForm('bill_date', ev.target.value)} />
                         <InputField label="Amount" prefix="$" value={staffEditForm.amount} onChange={ev => updateStaffEditForm('amount', ev.target.value)} />
                         <InputField label="Due Date" type="date" value={staffEditForm.due_date} onChange={ev => updateStaffEditForm('due_date', ev.target.value)} />
+                        <InputField label="Status" value={staffEditForm.status} onChange={ev => updateStaffEditForm('status', ev.target.value)} options={['Pending', 'Paid', 'Rejected']} />
                         <div className="col-span-2">
                           <InputField label="Description" large value={staffEditForm.description} onChange={ev => updateStaffEditForm('description', ev.target.value)} />
                         </div>
