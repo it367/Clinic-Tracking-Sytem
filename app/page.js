@@ -1,4 +1,4 @@
-//Clinic Management System v0.48
+//Clinic Management System v0.52
 // Devoloper: Mark Murillo 
 // Company: Kidshine Hawaii
 
@@ -1537,6 +1537,12 @@ const addUser = async () => {
     return;
   }
 
+  // Prevent IT from creating super_admin users
+  if (currentUser.role === 'it' && newUser.role === 'super_admin') {
+    showMessage('error', 'You do not have permission to create Super Admin users');
+    return;
+  }
+
  const confirmed = await showConfirm('Create User', `Are you sure you want to create user "${newUser.name}"?`, 'Create', 'green');
 if (!confirmed) return;
 
@@ -1588,6 +1594,12 @@ if (!confirmed) return;
 const updateUser = async () => {
   if (!editingUser.name || !editingUser.email) {
     showMessage('error', 'Please fill all required fields');
+    return;
+  }
+
+  // Prevent IT from setting super_admin role
+  if (currentUser.role === 'it' && editingUser.role === 'super_admin') {
+    showMessage('error', 'You do not have permission to assign Super Admin role');
     return;
   }
 
@@ -2661,7 +2673,7 @@ if (!currentUser) {
             {loginLoading ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : 'Login →'}
           </button>
           
-<p className="text-xs text-center text-gray-400">BETA Version 0.48</p>
+<p className="text-xs text-center text-gray-400">BETA Version 0.52</p>
         </div>
       </div>
     </div>
@@ -2878,24 +2890,28 @@ return (
             );
           })}
 
-          <div className="border-t my-4"></div>
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3 px-3">Support</p>
-          {SUPPORT_MODULES.map(m => {
-            const colors = MODULE_COLORS[m.id];
-            const isActive = activeModule === m.id && adminView !== 'users' && adminView !== 'export' && adminView !== 'settings' && view !== 'settings';
-            return (
-              <button
-                key={m.id}
-                onClick={() => { setActiveModule(m.id); setAdminView('records'); setView('entry'); setSidebarOpen(false); }}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all ${isActive ? `${colors.bg} ${colors.text} ${colors.border} border-2` : 'text-gray-600 hover:bg-gray-50'}`}
-              >
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${isActive ? colors.light : 'bg-gray-100'}`}>
-                  <m.icon className={`w-4 h-4 ${isActive ? colors.text : 'text-gray-500'}`} />
-                </div>
-                <span className="text-sm font-medium">{m.name}</span>
-              </button>
-            );
-          })}
+{(currentUser?.role === 'super_admin' || currentUser?.role === 'it' || !isAdmin) && (
+            <>
+              <div className="border-t my-4"></div>
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3 px-3">Support</p>
+              {SUPPORT_MODULES.map(m => {
+                const colors = MODULE_COLORS[m.id];
+                const isActive = activeModule === m.id && adminView !== 'users' && adminView !== 'export' && adminView !== 'settings' && view !== 'settings';
+                return (
+                  <button
+                    key={m.id}
+                    onClick={() => { setActiveModule(m.id); setAdminView('records'); setView('entry'); setSidebarOpen(false); }}
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all ${isActive ? `${colors.bg} ${colors.text} ${colors.border} border-2` : 'text-gray-600 hover:bg-gray-50'}`}
+                  >
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${isActive ? colors.light : 'bg-gray-100'}`}>
+                      <m.icon className={`w-4 h-4 ${isActive ? colors.text : 'text-gray-500'}`} />
+                    </div>
+                    <span className="text-sm font-medium">{m.name}</span>
+                  </button>
+                );
+              })}
+            </>
+          )}
 
           {isAdmin && (
             <>
@@ -2909,10 +2925,12 @@ return (
                 <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${adminView === 'export' ? 'bg-purple-100' : 'bg-gray-100'}`}><Download className="w-4 h-4" /></div>
                 <span className="text-sm font-medium">Export</span>
               </button>
+{(currentUser?.role === 'super_admin' || currentUser?.role === 'it') && (
                 <button onClick={() => { setAdminView('users'); loadUsers(); setSidebarOpen(false); }} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all ${adminView === 'users' ? 'bg-purple-50 text-purple-700 border-2 border-purple-200' : 'text-gray-600 hover:bg-gray-50'}`}>
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${adminView === 'users' ? 'bg-purple-100' : 'bg-gray-100'}`}><Users className="w-4 h-4" /></div>
-                <span className="text-sm font-medium">Users</span>
-              </button>
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${adminView === 'users' ? 'bg-purple-100' : 'bg-gray-100'}`}><Users className="w-4 h-4" /></div>
+                  <span className="text-sm font-medium">Users</span>
+                </button>
+              )}
             </>
           )}
         </nav>
@@ -3034,7 +3052,7 @@ return (
                     <InputField label="Username *" value={editingUser ? (editingUser.username || '') : newUser.username} onChange={e => editingUser ? setEditingUser({...editingUser, username: e.target.value}) : setNewUser({...newUser, username: e.target.value})} placeholder="Login username" />
                     <InputField label="Email *" value={editingUser ? editingUser.email : newUser.email} onChange={e => editingUser ? setEditingUser({...editingUser, email: e.target.value}) : setNewUser({...newUser, email: e.target.value})} />
                     <PasswordField label={editingUser ? "New Password" : "Password *"} value={editingUser ? (editingUser.newPassword || '') : newUser.password} onChange={e => editingUser ? setEditingUser({...editingUser, newPassword: e.target.value}) : setNewUser({...newUser, password: e.target.value})} placeholder={editingUser ? "Leave blank to keep current" : ""} />
-                    <InputField label="Role" value={editingUser ? editingUser.role : newUser.role} onChange={e => editingUser ? setEditingUser({...editingUser, role: e.target.value}) : setNewUser({...newUser, role: e.target.value})} options={isSuperAdmin ? ['staff', 'finance_admin', 'it', 'super_admin'] : ['staff', 'finance_admin']} />
+<InputField label="Role" value={editingUser ? editingUser.role : newUser.role} onChange={e => editingUser ? setEditingUser({...editingUser, role: e.target.value}) : setNewUser({...newUser, role: e.target.value})} options={currentUser?.role === 'super_admin' ? ['staff', 'finance_admin', 'it', 'super_admin'] : currentUser?.role === 'it' ? ['staff', 'finance_admin', 'it'] : ['staff', 'finance_admin']} />
                   </div>
                   {((editingUser ? editingUser.role : newUser.role) === 'staff') && (
                     <div className="mt-4">
@@ -3103,7 +3121,7 @@ return (
             >
               <Monitor className="w-4 h-4" />
             </button>
-            {u.id !== currentUser.id && (
+{u.id !== currentUser.id && !(currentUser.role === 'it' && u.role === 'super_admin') && (
               <>
                 <button
                   onClick={() => setEditingUser({ ...u, username: u.username || '', locationIds: u.locations?.map(l => l.id) || [] })}
@@ -5146,7 +5164,7 @@ if (activeModule === 'it-requests') {
       
 {/* Version Footer */}
       <div className="fixed bottom-6 left-4 lg:left-[310px] z-[25] pointer-events-none">
-        <p className="text-xs text-gray-400 opacity-70">CMS v0.48</p>
+        <p className="text-xs text-gray-400 opacity-70">CMS v0.52</p>
       </div>
     </div>
   );
