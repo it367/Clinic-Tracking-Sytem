@@ -8,7 +8,7 @@ import JSZip from 'jszip';
 import { supabase } from '../lib/supabase';
 import { DollarSign, FileText, Building2, Bot, Send, Loader2, LogOut, User, Upload, X, File, Shield, Receipt, CreditCard, Package, RefreshCw, Monitor, Menu, Eye, EyeOff, FolderOpen, Edit3, Users, Plus, Trash2, Lock, Download, Settings, MessageCircle, Sparkles, AlertCircle, Maximize2, Minimize2, Headphones, Search, TrendingUp, TrendingDown, Calendar, PieChart, BarChart3 } from 'lucide-react';
 const MODULES = [
-  { id: 'daily-recon', name: 'Daily Recon', icon: DollarSign, color: 'emerald', table: 'daily_recon' },
+  { id: 'daily-recon', name: 'Daily Reconciliation', icon: DollarSign, color: 'emerald', table: 'daily_recon' },
   { id: 'billing-inquiry', name: 'Billing Inquiry', icon: Receipt, color: 'blue', table: 'billing_inquiries' },
   { id: 'bills-payment', name: 'Bills Payment', icon: CreditCard, color: 'violet', table: 'bills_payment' },
   { id: 'order-requests', name: 'Order Requests', icon: Package, color: 'amber', table: 'order_requests' },
@@ -4805,7 +4805,7 @@ return (
                   {/* Staff's Cash Can Data (Read Only) */}
                   <div className="bg-white rounded-xl p-4 mb-3 border border-gray-200">
                     <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
-                      <DollarSign className="w-4 h-4 text-emerald-500" /> Staff Daily Cash Can
+                      <DollarSign className="w-4 h-4 text-emerald-500" /> Staff Daily Reconciliation Entry
                     </h4>
                     <div className="grid grid-cols-4 gap-3 text-sm">
                       <div><span className="text-gray-500">Cash:</span> <span className="font-medium">${Number(e.cash || 0).toFixed(2)}</span></div>
@@ -5315,7 +5315,7 @@ if (activeModule === 'it-requests') {
                 <>
                   <div className={`bg-white rounded-2xl shadow-lg p-6 border-l-4 ${currentColors?.accent}`}>
                     <h2 className="font-semibold mb-4 text-gray-800 flex items-center gap-2">
-                      <DollarSign className="w-5 h-5 text-emerald-500" />Daily Cash Can
+                      <DollarSign className="w-5 h-5 text-emerald-500" />Daily Reconciliation
                     </h2>
                     <div className="grid grid-cols-2 gap-4">
                       <InputField label="Date" type="date" value={forms['daily-recon'].recon_date} onChange={e => updateForm('daily-recon', 'recon_date', e.target.value)} />
