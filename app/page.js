@@ -205,12 +205,18 @@ function FileViewer({ file, onClose }) {
   );
 }
 
-function EntryPreview({ entry, module, onClose, colors, onViewDocument, currentUser, itUsers, onUpdateStatus, onDelete }) {
-  const [isEditing, setIsEditing] = useState(false);
+function EntryPreview({ entry, module, onClose, colors, onViewDocument, currentUser, itUsers, financeAdminUsers, onUpdateStatus, onDelete, onUpdateBillingInquiry }) {
+const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState({
     status: entry?.status || 'For Review',
     assigned_to: entry?.assigned_to || '',
     resolution_notes: entry?.resolution_notes || ''
+  });
+  const [billingEditForm, setBillingEditForm] = useState({
+    status: entry?.status || 'Pending',
+    billing_team_reviewed: entry?.billing_team_reviewed || '',
+    date_reviewed: entry?.date_reviewed || '',
+    result: entry?.result || ''
   });
 
   useEffect(() => {
@@ -219,6 +225,12 @@ function EntryPreview({ entry, module, onClose, colors, onViewDocument, currentU
         status: entry.status || 'For Review',
         assigned_to: entry.assigned_to || '',
         resolution_notes: entry.resolution_notes || ''
+      });
+      setBillingEditForm({
+        status: entry.status || 'Pending',
+        billing_team_reviewed: entry.billing_team_reviewed || '',
+        date_reviewed: entry.date_reviewed || '',
+        result: entry.result || ''
       });
       setIsEditing(false);
     }
@@ -233,12 +245,20 @@ function EntryPreview({ entry, module, onClose, colors, onViewDocument, currentU
   const isITRequest = module?.id === 'it-requests';
   const canEdit = isITRequest && currentUser && (currentUser.role === 'super_admin' || currentUser.role === 'finance_admin' || currentUser.role === 'it');
 
-  const handleSave = () => {
+const handleSave = () => {
     if (onUpdateStatus) {
       onUpdateStatus(entry.id, editForm.status, {
         assigned_to: editForm.assigned_to || null,
         resolution_notes: editForm.resolution_notes || null
       });
+    }
+    setIsEditing(false);
+    onClose();
+  };
+
+  const handleBillingSave = () => {
+    if (onUpdateBillingInquiry) {
+      onUpdateBillingInquiry(entry.id, billingEditForm);
     }
     setIsEditing(false);
     onClose();
@@ -307,21 +327,112 @@ function EntryPreview({ entry, module, onClose, colors, onViewDocument, currentU
             </div>
           )}
 
-          {/* Billing Inquiry */}
+{/* Billing Inquiry */}
           {module?.id === 'billing-inquiry' && (
-            <div className="grid grid-cols-2 gap-4">
-              <div><span className="text-gray-600 text-sm block">Patient Name</span><span className="font-medium">{entry.patient_name || '-'}</span></div>
-              <div><span className="text-gray-600 text-sm block">Chart Number</span><span className="font-medium">{entry.chart_number || '-'}</span></div>
-              <div><span className="text-gray-600 text-sm block">Parent Name</span><span className="font-medium">{entry.parent_name || '-'}</span></div>
-              <div><span className="text-gray-600 text-sm block">Date of Request</span><span className="font-medium">{formatDate(entry.date_of_request)}</span></div>
-              <div><span className="text-gray-600 text-sm block">Inquiry Type</span><span className="font-medium">{entry.inquiry_type || '-'}</span></div>
-              <div><span className="text-gray-600 text-sm block">Amount in Question</span><span className="font-medium text-emerald-600">{formatCurrency(entry.amount_in_question)}</span></div>
-              <div><span className="text-gray-600 text-sm block">Contact Method</span><span className="font-medium">{entry.best_contact_method || '-'}</span></div>
-              <div><span className="text-gray-600 text-sm block">Best Time to Contact</span><span className="font-medium">{entry.best_contact_time || '-'}</span></div>
-              <div><span className="text-gray-600 text-sm block">Billing Team Reviewed</span><span className="font-medium">{entry.billing_team_reviewed || '-'}</span></div>
-              <div><span className="text-gray-600 text-sm block">Date Reviewed</span><span className="font-medium">{formatDate(entry.date_reviewed)}</span></div>
-              <div><span className="text-gray-600 text-sm block">Result</span><span className="font-medium">{entry.result || '-'}</span></div>
-              <div className="col-span-2"><span className="text-gray-600 text-sm block">Description</span><p className="font-medium bg-gray-50 p-3 rounded-lg mt-1">{entry.description || '-'}</p></div>
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div><span className="text-gray-600 text-sm block">Patient Name</span><span className="font-medium">{entry.patient_name || '-'}</span></div>
+                <div><span className="text-gray-600 text-sm block">Chart Number</span><span className="font-medium">{entry.chart_number || '-'}</span></div>
+                <div><span className="text-gray-600 text-sm block">Parent Name</span><span className="font-medium">{entry.parent_name || '-'}</span></div>
+                <div><span className="text-gray-600 text-sm block">Date of Request</span><span className="font-medium">{formatDate(entry.date_of_request)}</span></div>
+                <div><span className="text-gray-600 text-sm block">Inquiry Type</span><span className="font-medium">{entry.inquiry_type || '-'}</span></div>
+                <div><span className="text-gray-600 text-sm block">Amount in Question</span><span className="font-medium text-emerald-600">{formatCurrency(entry.amount_in_question)}</span></div>
+                <div><span className="text-gray-600 text-sm block">Contact Method</span><span className="font-medium">{entry.best_contact_method || '-'}</span></div>
+                <div><span className="text-gray-600 text-sm block">Best Time to Contact</span><span className="font-medium">{entry.best_contact_time || '-'}</span></div>
+                <div className="col-span-2"><span className="text-gray-600 text-sm block">Description</span><p className="font-medium bg-gray-50 p-3 rounded-lg mt-1">{entry.description || '-'}</p></div>
+              </div>
+
+              {/* Review Section - Read Only */}
+              {!isEditing && (entry.billing_team_reviewed || entry.date_reviewed || entry.result) && (
+                <div className="p-4 bg-blue-50 rounded-xl border border-blue-200">
+                  <h4 className="font-semibold text-blue-800 mb-3 flex items-center gap-2">
+                    <FileText className="w-4 h-4" /> Review Details
+                  </h4>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div><span className="text-gray-600 text-sm block">Reviewed By</span><span className="font-medium">{entry.billing_team_reviewed || '-'}</span></div>
+                    <div><span className="text-gray-600 text-sm block">Date Reviewed</span><span className="font-medium">{formatDate(entry.date_reviewed)}</span></div>
+                    <div className="col-span-2"><span className="text-gray-600 text-sm block">Result</span><span className="font-medium">{entry.result || '-'}</span></div>
+                  </div>
+                </div>
+              )}
+
+              {/* Edit Section for Billing Inquiry - Admin Only */}
+              {currentUser && (currentUser.role === 'super_admin' || currentUser.role === 'finance_admin') && (
+                <div className="mt-6 pt-4 border-t border-gray-200">
+                  {!isEditing ? (
+                    <button
+                      onClick={() => setIsEditing(true)}
+                      className="w-full py-3 bg-gradient-to-r from-blue-500 to-indigo-500 text-white rounded-xl font-medium hover:shadow-lg transition-all flex items-center justify-center gap-2"
+                    >
+                      <Edit3 className="w-4 h-4" /> Review & Update Status
+                    </button>
+                  ) : (
+                    <div className="space-y-4 bg-blue-50 p-4 rounded-xl border border-blue-200">
+                      <h4 className="font-semibold text-blue-800 flex items-center gap-2">
+                        <Edit3 className="w-4 h-4" /> Review Billing Inquiry
+                      </h4>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-xs font-medium text-gray-600 mb-1.5 block">Status</label>
+                          <select
+                            value={billingEditForm.status}
+                            onChange={e => setBillingEditForm({ ...billingEditForm, status: e.target.value })}
+                            className="w-full p-2.5 border-2 border-gray-200 rounded-xl outline-none focus:border-blue-400 bg-white"
+                          >
+                            <option value="Pending">Pending</option>
+                            <option value="In Progress">In Progress</option>
+                            <option value="Resolved">Resolved</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-xs font-medium text-gray-600 mb-1.5 block">Reviewed By</label>
+                          <select
+                            value={billingEditForm.billing_team_reviewed}
+                            onChange={e => setBillingEditForm({ ...billingEditForm, billing_team_reviewed: e.target.value })}
+                            className="w-full p-2.5 border-2 border-gray-200 rounded-xl outline-none focus:border-blue-400 bg-white"
+                          >
+                            <option value="">Select Reviewer...</option>
+                            {financeAdminUsers?.map(u => <option key={u.id} value={u.name}>{u.name}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-xs font-medium text-gray-600 mb-1.5 block">Date Reviewed</label>
+                          <input
+                            type="date"
+                            value={billingEditForm.date_reviewed}
+                            onChange={e => setBillingEditForm({ ...billingEditForm, date_reviewed: e.target.value })}
+                            className="w-full p-2.5 border-2 border-gray-200 rounded-xl outline-none focus:border-blue-400 bg-white"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium text-gray-600 mb-1.5 block">Result</label>
+                        <textarea
+                          value={billingEditForm.result}
+                          onChange={e => setBillingEditForm({ ...billingEditForm, result: e.target.value })}
+                          placeholder="Enter review result or notes..."
+                          rows={3}
+                          className="w-full p-2.5 border-2 border-gray-200 rounded-xl outline-none focus:border-blue-400 bg-white resize-none"
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={handleBillingSave}
+                          className="flex-1 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl font-medium hover:shadow-lg transition-all"
+                        >
+                          Save Review
+                        </button>
+                        <button
+                          onClick={() => setIsEditing(false)}
+                          className="px-4 py-2.5 bg-gray-200 rounded-xl font-medium hover:bg-gray-300 transition-all"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -714,7 +825,8 @@ const [loadingUserSessions, setLoadingUserSessions] = useState(false);
 const [staffSortOrder, setStaffSortOrder] = useState('desc');
 const [staffRecordsPerPage, setStaffRecordsPerPage] = useState(20);
 const [staffCurrentPage, setStaffCurrentPage] = useState(1);
-  const [itUsers, setItUsers] = useState([]);
+const [itUsers, setItUsers] = useState([]);
+  const [financeAdminUsers, setFinanceAdminUsers] = useState([]);
 const [confirmDialog, setConfirmDialog] = useState({ open: false, title: '', message: '', onConfirm: null, onCancel: null, confirmText: 'Confirm', confirmColor: 'blue' });
 const [passwordDialog, setPasswordDialog] = useState({ open: false, title: '', message: '', onConfirm: null, onCancel: null, password: '', error: '' });
 const [selectedRecords, setSelectedRecords] = useState([]);
@@ -806,6 +918,7 @@ useEffect(() => {
 if (sessionData.user.role === 'super_admin' || sessionData.user.role === 'finance_admin' || sessionData.user.role === 'it') {
   loadUsers();
   loadItUsers();
+  loadFinanceAdminUsers();
   setAdminView('analytics');
 }
       }
@@ -874,11 +987,14 @@ useEffect(() => { setCurrentPage(1); setRecordSearch(''); }, [activeModule, admi
   useEffect(() => { setStaffCurrentPage(1); setStaffRecordSearch(''); setEditingStaffEntry(null); }, [activeModule, selectedLocation]);
 useEffect(() => { setSelectedRecords([]); setSelectAll(false); }, [activeModule, adminLocation, currentPage, recordSearch]);
   useEffect(() => { setSelectedDocuments([]); setDocSelectAll(false); }, [adminView, docSearch]);
-  useEffect(() => {
+useEffect(() => {
   if (viewingEntry && activeModule === 'it-requests') {
     loadItUsers();
   }
-}, [viewingEntry]);
+  if (viewingEntry && activeModule === 'billing-inquiry') {
+    loadFinanceAdminUsers();
+  }
+}, [viewingEntry, activeModule]);
   
 // Load data when analytics module changes
 useEffect(() => {
@@ -1031,6 +1147,20 @@ const loadItUsers = async () => {
     console.error('Error loading IT users:', error);
   }
   if (data) setItUsers(data);
+};
+
+const loadFinanceAdminUsers = async () => {
+  const { data, error } = await supabase
+    .from('users')
+    .select('id, name')
+    .in('role', ['finance_admin', 'super_admin'])
+    .eq('is_active', true)
+    .order('name');
+  
+  if (error) {
+    console.error('Error loading Finance Admin users:', error);
+  }
+  if (data) setFinanceAdminUsers(data);
 };
   
   const loadUsers = async () => {
@@ -1356,6 +1486,7 @@ setCurrentUser(user);
 if (user.role === 'super_admin' || user.role === 'finance_admin') {
       loadUsers();
       loadItUsers();
+      loadFinanceAdminUsers();
       loadLoginHistory(user.id);
       setAdminView('analytics'); // Default to analytics for admins
     }
@@ -1857,6 +1988,32 @@ const updateReconForm = (entryId, field, value) => {
       [field]: value
     }
   }));
+};
+
+const updateBillingInquiry = async (entryId, formData) => {
+  const confirmed = await showConfirm('Update Billing Inquiry', 'Are you sure you want to update this billing inquiry?', 'Update', 'blue');
+  if (!confirmed) return;
+
+  const updateData = {
+    status: formData.status,
+    billing_team_reviewed: formData.billing_team_reviewed || null,
+    date_reviewed: formData.date_reviewed || null,
+    result: formData.result || null,
+    updated_by: currentUser.id
+  };
+
+  const { error } = await supabase
+    .from('billing_inquiries')
+    .update(updateData)
+    .eq('id', entryId);
+
+  if (error) {
+    showMessage('error', 'Failed to update billing inquiry');
+    return;
+  }
+
+  showMessage('success', '✓ Billing inquiry updated!');
+  loadModuleData('billing-inquiry');
 };
   
 const updateEntryStatus = async (moduleId, entryId, newStatus, additionalFields = {}) => {
@@ -2632,8 +2789,13 @@ return (
   onViewDocument={viewDocument}
   currentUser={currentUser}
   itUsers={itUsers}
+  financeAdminUsers={financeAdminUsers}
   onUpdateStatus={(entryId, newStatus, additionalFields) => {
     updateEntryStatus('it-requests', entryId, newStatus, additionalFields);
+    setViewingEntry(null);
+  }}
+  onUpdateBillingInquiry={async (entryId, formData) => {
+    await updateBillingInquiry(entryId, formData);
     setViewingEntry(null);
   }}
   onDelete={async (recordId) => {
