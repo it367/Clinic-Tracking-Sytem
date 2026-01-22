@@ -452,6 +452,15 @@ const handleBillingSave = () => {
 {/* Bills Payment */}
           {module?.id === 'bills-payment' && (
             <div className="space-y-4">
+              {/* Transaction ID Header */}
+              {entry.transaction_id && (
+                <div className="flex items-center gap-2 p-3 bg-violet-100 rounded-xl border border-violet-200">
+                  <CreditCard className="w-5 h-5 text-violet-600" />
+                  <span className="text-sm text-violet-600">Transaction ID:</span>
+                  <span className="font-bold text-violet-700 text-lg">{entry.transaction_id}</span>
+                </div>
+              )}
+              
               <div className="grid grid-cols-2 gap-4">
                 <div><span className="text-gray-600 text-sm block">Bill Date</span><span className="font-medium">{formatDate(entry.bill_date)}</span></div>
                 <div><span className="text-gray-600 text-sm block">Vendor</span><span className="font-medium">{entry.vendor || '-'}</span></div>
@@ -980,7 +989,7 @@ const [analyticsModule, setAnalyticsModule] = useState('daily-recon');
   const [forms, setForms] = useState({
     'daily-recon': { recon_date: today, cash: '', credit_card: '', checks_otc: '', insurance_checks: '', care_credit: '', vcc: '', efts: '', deposit_cash: '', deposit_credit_card: '', deposit_checks: '', deposit_insurance: '', deposit_care_credit: '', deposit_vcc: '', deposit_efts: '', notes: '', entered_by: '' },
     'billing-inquiry': { patient_name: '', chart_number: '', parent_name: '', date_of_request: today, inquiry_type: '', description: '', amount_in_question: '', best_contact_method: '', best_contact_time: '', billing_team_reviewed: '', date_reviewed: '', status: 'Pending', result: '' },
-'bills-payment': { bill_date: today, vendor: '', description: '', amount: '', due_date: '' },
+'bills-payment': { bill_date: today, vendor: '', transaction_id: '', description: '', amount: '', due_date: '' },
     'order-requests': { date_entered: today, vendor: '', invoice_number: '', invoice_date: '', due_date: '', amount: '', entered_by: '', notes: '' },
     'refund-requests': { patient_name: '', chart_number: '', parent_name: '', rp_address: '', date_of_request: today, type: '', description: '', amount_requested: '', best_contact_method: '', eassist_audited: '', status: 'Pending' },
    'it-requests': { date_reported: today, urgency: '', requester_name: '', device_system: '', description_of_issue: '', best_contact_method: '', best_contact_time: '', assigned_to: '', status: 'Open', resolution_notes: '', completed_by: '' }
@@ -1959,6 +1968,7 @@ if (moduleId === 'daily-recon') {
 } else if (moduleId === 'bills-payment') {
   entryData = {
     ...entryData,
+    transaction_id: form.transaction_id || null,
     bill_date: form.bill_date,
     vendor: form.vendor,
     description: form.description,
@@ -2535,6 +2545,7 @@ const getTotalPages = () => {
     });
 } else if (activeModule === 'bills-payment') {
     setStaffEditForm({
+      transaction_id: entry.transaction_id || '',
       bill_date: entry.bill_date || '',
       vendor: entry.vendor || '',
       description: entry.description || '',
@@ -2615,6 +2626,7 @@ if (!confirmed) return;;
     };
 } else if (activeModule === 'bills-payment') {
     updateData = { ...updateData,
+      transaction_id: staffEditForm.transaction_id || null,
       bill_date: staffEditForm.bill_date,
       vendor: staffEditForm.vendor,
       description: staffEditForm.description,
@@ -4724,6 +4736,55 @@ if (activeModule === 'it-requests') {
   );
 }
 
+// Bills Payment - special handling with Transaction ID
+            if (activeModule === 'bills-payment') {
+              return (
+                <div key={e.id} className={`p-4 rounded-xl border-2 ${currentColors?.border} ${currentColors?.bg} hover:shadow-md transition-all ${selectedRecords.includes(e.id) ? 'ring-2 ring-purple-500' : ''}`}>
+                  <div className="flex justify-between items-start gap-4">
+                    <div className="flex items-start gap-3 flex-1">
+                      <button onClick={() => toggleRecordSelection(e.id)} className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 mt-1 transition-all ${selectedRecords.includes(e.id) ? 'bg-purple-600 border-purple-600' : 'border-gray-300 hover:border-purple-400'}`}>
+                        {selectedRecords.includes(e.id) && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
+                      </button>
+                      <div className="flex-1 cursor-pointer" onClick={() => setViewingEntry(e)}>
+                        <div className="flex items-center gap-2 flex-wrap mb-1">
+                          {e.transaction_id && <span className="font-bold text-violet-600">{e.transaction_id}</span>}
+                          <StatusBadge status={e.status} />
+                          {e.paid === true && <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-md text-xs font-medium">Paid</span>}
+                        </div>
+                        <p className="font-medium text-gray-800">{e.vendor || 'No Vendor'}</p>
+                        <p className="text-sm text-gray-500 mt-1">
+                          {e.locations?.name} • {e.bill_date ? new Date(e.bill_date).toLocaleDateString() : new Date(e.created_at).toLocaleDateString()}
+                          {e.due_date && <span className="text-amber-600"> • Due: {new Date(e.due_date).toLocaleDateString()}</span>}
+                        </p>
+                        <p className="text-lg font-bold text-emerald-600 mt-2">${Number(e.amount || 0).toFixed(2)}</p>
+                        
+                        {docs.length > 0 && (
+                          <div className="mt-3 flex flex-wrap gap-2" onClick={ev => ev.stopPropagation()}>
+                            {docs.map(doc => (
+                              <div key={doc.id} className="flex items-center gap-1 bg-white px-2 py-1 rounded-lg border text-xs">
+                                <File className="w-3 h-3 text-gray-400" />
+                                <span className="text-gray-600 max-w-24 truncate">{doc.file_name}</span>
+                                <button onClick={() => viewDocument(doc)} className="p-0.5 text-blue-500 hover:bg-blue-100 rounded" title="Preview">
+                                  <Eye className="w-3 h-3" />
+                                </button>
+                                <button onClick={() => downloadDocument(doc)} className="p-0.5 text-emerald-500 hover:bg-emerald-100 rounded" title="Download">
+                                  <Download className="w-3 h-3" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1" onClick={ev => ev.stopPropagation()}>
+                      <button onClick={() => setViewingEntry(e)} className="p-2 text-gray-500 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors" title="Preview"><Eye className="w-4 h-4" /></button>
+                      <button onClick={() => deleteRecord(activeModule, e.id)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors" title="Delete"><Trash2 className="w-4 h-4" /></button>
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+
 // Default handling for other modules
             return (
               <div key={e.id} className={`p-4 rounded-xl border-2 ${currentColors?.border} ${currentColors?.bg} hover:shadow-md transition-all ${selectedRecords.includes(e.id) ? 'ring-2 ring-purple-500' : ''}`}>
@@ -4929,8 +4990,9 @@ if (activeModule === 'it-requests') {
     <div className={`bg-white rounded-2xl shadow-lg p-6 border-l-4 ${currentColors?.accent}`}>
       <h2 className="font-semibold mb-4 text-gray-800">Bills Payment Log</h2>
       <div className="grid grid-cols-2 gap-4">
-        <InputField label="Bill Date" type="date" value={forms['bills-payment'].bill_date} onChange={e => updateForm('bills-payment', 'bill_date', e.target.value)} />
+        <InputField label="Transaction / Invoice ID" value={forms['bills-payment'].transaction_id} onChange={e => updateForm('bills-payment', 'transaction_id', e.target.value)} placeholder="e.g., INV-12345, Bill #567" />
         <InputField label="Vendor" value={forms['bills-payment'].vendor} onChange={e => updateForm('bills-payment', 'vendor', e.target.value)} />
+        <InputField label="Bill Date" type="date" value={forms['bills-payment'].bill_date} onChange={e => updateForm('bills-payment', 'bill_date', e.target.value)} />
         <InputField label="Amount" prefix="$" value={forms['bills-payment'].amount} onChange={e => updateForm('bills-payment', 'amount', e.target.value)} />
         <InputField label="Due Date" type="date" value={forms['bills-payment'].due_date} onChange={e => updateForm('bills-payment', 'due_date', e.target.value)} />
       </div>
@@ -5146,8 +5208,9 @@ if (activeModule === 'it-requests') {
                     
 {activeModule === 'bills-payment' && (
                       <div className="grid grid-cols-2 gap-3">
-                        <InputField label="Bill Date" type="date" value={staffEditForm.bill_date} onChange={ev => updateStaffEditForm('bill_date', ev.target.value)} />
+                        <InputField label="Transaction / Invoice ID" value={staffEditForm.transaction_id} onChange={ev => updateStaffEditForm('transaction_id', ev.target.value)} placeholder="e.g., INV-12345" />
                         <InputField label="Vendor" value={staffEditForm.vendor} onChange={ev => updateStaffEditForm('vendor', ev.target.value)} />
+                        <InputField label="Bill Date" type="date" value={staffEditForm.bill_date} onChange={ev => updateStaffEditForm('bill_date', ev.target.value)} />
                         <InputField label="Amount" prefix="$" value={staffEditForm.amount} onChange={ev => updateStaffEditForm('amount', ev.target.value)} />
                         <InputField label="Due Date" type="date" value={staffEditForm.due_date} onChange={ev => updateStaffEditForm('due_date', ev.target.value)} />
                         <div className="col-span-2">
@@ -5213,9 +5276,14 @@ if (activeModule === 'it-requests') {
                   <div className="flex justify-between items-start">
                     <div className="flex-1 cursor-pointer" onClick={() => setViewingEntry(e)}>
                       <div className="flex items-center gap-2">
-                        <p className="font-medium text-gray-800">
-                          {e.ticket_number ? `IT-${e.ticket_number}` : e.patient_name || e.vendor || e.recon_date || new Date(e.created_at).toLocaleDateString()}
+<p className="font-medium text-gray-800">
+                          {e.ticket_number ? `IT-${e.ticket_number}` : 
+                           e.transaction_id ? <span className="text-violet-600 font-bold">{e.transaction_id}</span> :
+                           e.patient_name || e.vendor || e.recon_date || new Date(e.created_at).toLocaleDateString()}
                         </p>
+                        {activeModule === 'bills-payment' && e.transaction_id && e.vendor && (
+                          <p className="text-sm text-gray-600">{e.vendor}</p>
+                        )}
                         <StatusBadge status={e.status || (activeModule === 'daily-recon' ? 'Pending' : e.status)} />
                         {!canEdit && <Lock className="w-4 h-4 text-gray-400" title="Locked (past Friday cutoff)" />}
                       </div>
