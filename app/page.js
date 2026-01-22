@@ -2270,13 +2270,14 @@ const updateOrderRequest = async (entryId, formData) => {
     updated_by: currentUser.id
   };
 
-  const { error } = await supabase
+const { error } = await supabase
     .from('order_requests')
     .update(updateData)
     .eq('id', entryId);
 
   if (error) {
-    showMessage('error', 'Failed to update order request');
+    console.error('Order request update error:', error);
+    showMessage('error', 'Failed to update order request: ' + error.message);
     return;
   }
 
