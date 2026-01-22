@@ -4396,6 +4396,7 @@ const totalDeposited = filteredData.reduce((sum, r) => {
                         </p>
                       </div>
                     </div>
+                          </div>
 {!isEditing && (
                       <div className="flex items-center gap-1" onClick={ev => ev.stopPropagation()}>
                         <button onClick={() => setViewingEntry(e)} className="p-2 text-gray-500 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors" title="Preview"><Eye className="w-4 h-4" /></button>
