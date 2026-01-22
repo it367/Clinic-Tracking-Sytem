@@ -3853,26 +3853,64 @@ const totalDeposited = filteredData.reduce((sum, r) => {
               </div>
             )}
 
-            {/* Weekly Trend */}
-            {Object.keys(byWeek).length > 1 && (
+{/* Weekly Trend - Last 4 Weeks */}
+            {Object.keys(byWeek).length > 0 && (
               <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
                 <h3 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                  <TrendingUp className="w-5 h-5 text-emerald-500" /> Weekly Trend
+                  <TrendingUp className="w-5 h-5 text-emerald-500" /> Weekly Summary
                 </h3>
-                <div className="space-y-2">
-                  {Object.entries(byWeek).sort((a, b) => a[0].localeCompare(b[0])).slice(-8).map(([week, stats]) => {
-                    const maxVal = Math.max(...Object.values(byWeek).map(w => w.collected));
-                    return (
-                      <div key={week} className="flex items-center gap-3">
-                        <span className="text-xs text-gray-500 w-24 flex-shrink-0">Week of {new Date(week).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
-                        <div className="flex-1 h-8 bg-gray-100 rounded-lg overflow-hidden flex">
-                          <div className="h-full bg-emerald-500 flex items-center justify-end pr-2" style={{width: `${maxVal > 0 ? (stats.collected / maxVal * 100) : 0}%`}}>
-                            <span className="text-xs text-white font-medium">${(stats.collected / 1000).toFixed(1)}k</span>
+                <div className="flex items-center gap-4 mb-4 text-xs">
+                  <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-emerald-500"></div><span className="text-gray-600">Collected</span></div>
+                  <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-blue-500"></div><span className="text-gray-600">Deposited</span></div>
+                </div>
+                <div className="space-y-4">
+                  {Object.entries(byWeek)
+                    .sort((a, b) => b[0].localeCompare(a[0]))
+                    .slice(0, 4)
+                    .map(([weekStart, stats]) => {
+                      const startDate = new Date(weekStart);
+                      const endDate = new Date(startDate);
+                      endDate.setDate(startDate.getDate() + 6);
+                      const maxVal = Math.max(...Object.values(byWeek).map(w => Math.max(w.collected, w.deposited)));
+                      const collectedPct = maxVal > 0 ? (stats.collected / maxVal * 100) : 0;
+                      const depositedPct = maxVal > 0 ? (stats.deposited / maxVal * 100) : 0;
+                      
+                      return (
+                        <div key={weekStart} className="p-3 bg-gray-50 rounded-xl">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-sm font-medium text-gray-700">
+                              {startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - {endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                            </span>
+                            <span className="text-xs text-gray-400">
+                              {startDate.getFullYear()}
+                            </span>
                           </div>
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-gray-500 w-16">Collected</span>
+                              <div className="flex-1 h-5 bg-gray-200 rounded-full overflow-hidden">
+                                <div className="h-full bg-emerald-500 rounded-full transition-all" style={{width: `${collectedPct}%`}}></div>
+                              </div>
+                              <span className="text-xs font-semibold text-emerald-600 w-20 text-right">${stats.collected.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-gray-500 w-16">Deposited</span>
+                              <div className="flex-1 h-5 bg-gray-200 rounded-full overflow-hidden">
+                                <div className="h-full bg-blue-500 rounded-full transition-all" style={{width: `${depositedPct}%`}}></div>
+                              </div>
+                              <span className="text-xs font-semibold text-blue-600 w-20 text-right">${stats.deposited.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                            </div>
+                          </div>
+                          {stats.collected !== stats.deposited && (
+                            <div className="mt-2 pt-2 border-t border-gray-200 flex justify-end">
+                              <span className={`text-xs font-medium ${stats.collected > stats.deposited ? 'text-amber-600' : 'text-emerald-600'}`}>
+                                {stats.collected > stats.deposited ? `$${(stats.collected - stats.deposited).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})} pending` : 'Balanced ✓'}
+                              </span>
+                            </div>
+                          )}
                         </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
                 </div>
               </div>
             )}
