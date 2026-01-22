@@ -205,18 +205,19 @@ function FileViewer({ file, onClose }) {
   );
 }
 
-function EntryPreview({ entry, module, onClose, colors, onViewDocument, currentUser, itUsers, financeAdminUsers, onUpdateStatus, onDelete, onUpdateBillingInquiry }) {
+function EntryPreview({ entry, module, onClose, colors, onViewDocument, currentUser, itUsers, financeAdminUsers, onUpdateStatus, onDelete, onUpdateBillingInquiry, onUpdateBillsPayment }) {
 const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState({
     status: entry?.status || 'For Review',
     assigned_to: entry?.assigned_to || '',
     resolution_notes: entry?.resolution_notes || ''
   });
-  const [billingEditForm, setBillingEditForm] = useState({
+const [billingEditForm, setBillingEditForm] = useState({
     status: entry?.status || 'Pending',
     billing_team_reviewed: entry?.billing_team_reviewed || '',
     date_reviewed: entry?.date_reviewed || '',
-    result: entry?.result || ''
+    result: entry?.result || '',
+    paid: entry?.paid ?? null
   });
 
   useEffect(() => {
@@ -226,11 +227,12 @@ const [isEditing, setIsEditing] = useState(false);
         assigned_to: entry.assigned_to || '',
         resolution_notes: entry.resolution_notes || ''
       });
-      setBillingEditForm({
+setBillingEditForm({
         status: entry.status || 'Pending',
-        billing_team_reviewed: entry.billing_team_reviewed || '',
+        billing_team_reviewed: entry.billing_team_reviewed || entry.ap_reviewed || '',
         date_reviewed: entry.date_reviewed || '',
-        result: entry.result || ''
+        result: entry.result || '',
+        paid: entry.paid ?? null
       });
       setIsEditing(false);
     }
@@ -243,9 +245,10 @@ const [isEditing, setIsEditing] = useState(false);
   const formatDateTime = (date) => date ? new Date(date).toLocaleString() : '-';
 
 const isITRequest = module?.id === 'it-requests';
-  const isBillingInquiry = module?.id === 'billing-inquiry';
+const isBillingInquiry = module?.id === 'billing-inquiry';
+  const isBillsPayment = module?.id === 'bills-payment';
   const canEditIT = isITRequest && currentUser && (currentUser.role === 'super_admin' || currentUser.role === 'it');
-  const canEditBilling = isBillingInquiry && currentUser && (currentUser.role === 'super_admin' || currentUser.role === 'finance_admin');
+  const canEditBilling = (isBillingInquiry || isBillsPayment) && currentUser && (currentUser.role === 'super_admin' || currentUser.role === 'finance_admin');
 
 const handleSave = () => {
     if (onUpdateStatus) {
@@ -258,9 +261,17 @@ const handleSave = () => {
     onClose();
   };
 
-  const handleBillingSave = () => {
+const handleBillingSave = () => {
     if (onUpdateBillingInquiry) {
       onUpdateBillingInquiry(entry.id, billingEditForm);
+    }
+    setIsEditing(false);
+    onClose();
+  };
+
+  const handleBillsPaymentSave = () => {
+    if (onUpdateBillsPayment) {
+      onUpdateBillsPayment(entry.id, billingEditForm);
     }
     setIsEditing(false);
     onClose();
@@ -438,19 +449,112 @@ const handleSave = () => {
             </div>
           )}
 
-          {/* Bills Payment */}
+{/* Bills Payment */}
           {module?.id === 'bills-payment' && (
-            <div className="grid grid-cols-2 gap-4">
-              <div><span className="text-gray-600 text-sm block">Bill Date</span><span className="font-medium">{formatDate(entry.bill_date)}</span></div>
-              <div><span className="text-gray-600 text-sm block">Vendor</span><span className="font-medium">{entry.vendor || '-'}</span></div>
-              <div><span className="text-gray-600 text-sm block">Amount</span><span className="font-medium text-emerald-600">{formatCurrency(entry.amount)}</span></div>
-              <div><span className="text-gray-600 text-sm block">Due Date</span><span className="font-medium">{formatDate(entry.due_date)}</span></div>
-              <div><span className="text-gray-600 text-sm block">Bill Status</span><span className="font-medium">{entry.bill_status || '-'}</span></div>
-              <div><span className="text-gray-600 text-sm block">Manager Initials</span><span className="font-medium">{entry.manager_initials || '-'}</span></div>
-              <div><span className="text-gray-600 text-sm block">AP Reviewed</span><span className="font-medium">{entry.ap_reviewed || '-'}</span></div>
-              <div><span className="text-gray-600 text-sm block">Date Reviewed</span><span className="font-medium">{formatDate(entry.date_reviewed)}</span></div>
-              <div><span className="text-gray-600 text-sm block">Paid</span><span className="font-medium">{entry.paid || '-'}</span></div>
-              <div className="col-span-2"><span className="text-gray-600 text-sm block">Description</span><p className="font-medium bg-gray-50 p-3 rounded-lg mt-1">{entry.description || '-'}</p></div>
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div><span className="text-gray-600 text-sm block">Bill Date</span><span className="font-medium">{formatDate(entry.bill_date)}</span></div>
+                <div><span className="text-gray-600 text-sm block">Vendor</span><span className="font-medium">{entry.vendor || '-'}</span></div>
+                <div><span className="text-gray-600 text-sm block">Amount</span><span className="font-medium text-emerald-600">{formatCurrency(entry.amount)}</span></div>
+                <div><span className="text-gray-600 text-sm block">Due Date</span><span className="font-medium">{formatDate(entry.due_date)}</span></div>
+                <div className="col-span-2"><span className="text-gray-600 text-sm block">Description</span><p className="font-medium bg-gray-50 p-3 rounded-lg mt-1">{entry.description || '-'}</p></div>
+              </div>
+
+              {/* Review Section - Read Only */}
+              {!isEditing && (entry.ap_reviewed || entry.date_reviewed || entry.paid !== null) && (
+                <div className="p-4 bg-violet-50 rounded-xl border border-violet-200">
+                  <h4 className="font-semibold text-violet-800 mb-3 flex items-center gap-2">
+                    <FileText className="w-4 h-4" /> AP Review Details
+                  </h4>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div><span className="text-gray-600 text-sm block">Reviewed By</span><span className="font-medium">{entry.ap_reviewed || '-'}</span></div>
+                    <div><span className="text-gray-600 text-sm block">Date Reviewed</span><span className="font-medium">{formatDate(entry.date_reviewed)}</span></div>
+                    <div><span className="text-gray-600 text-sm block">Paid</span><span className={`font-medium ${entry.paid === true ? 'text-emerald-600' : entry.paid === false ? 'text-red-600' : ''}`}>{entry.paid === true ? 'Yes' : entry.paid === false ? 'No' : '-'}</span></div>
+                    <div><span className="text-gray-600 text-sm block">Status</span><StatusBadge status={entry.status} /></div>
+                  </div>
+                </div>
+              )}
+
+              {/* Edit Section for Bills Payment - Admin Only */}
+              {canEditBilling && (
+                <div className="mt-6 pt-4 border-t border-gray-200">
+                  {!isEditing ? (
+                    <button
+                      onClick={() => setIsEditing(true)}
+                      className="w-full py-3 bg-gradient-to-r from-violet-500 to-purple-500 text-white rounded-xl font-medium hover:shadow-lg transition-all flex items-center justify-center gap-2"
+                    >
+                      <Edit3 className="w-4 h-4" /> Review & Update Payment
+                    </button>
+                  ) : (
+                    <div className="space-y-4 bg-violet-50 p-4 rounded-xl border border-violet-200">
+                      <h4 className="font-semibold text-violet-800 flex items-center gap-2">
+                        <Edit3 className="w-4 h-4" /> Review Bills Payment
+                      </h4>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-xs font-medium text-gray-600 mb-1.5 block">Status</label>
+                          <select
+                            value={billingEditForm.status}
+                            onChange={ev => setBillingEditForm({ ...billingEditForm, status: ev.target.value })}
+                            className="w-full p-2.5 border-2 border-gray-200 rounded-xl outline-none focus:border-violet-400 bg-white"
+                          >
+                            <option value="Pending">Pending</option>
+                            <option value="Approved">Approved</option>
+                            <option value="Paid">Paid</option>
+                            <option value="Rejected">Rejected</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-xs font-medium text-gray-600 mb-1.5 block">Reviewed By</label>
+                          <select
+                            value={billingEditForm.billing_team_reviewed}
+                            onChange={ev => setBillingEditForm({ ...billingEditForm, billing_team_reviewed: ev.target.value })}
+                            className="w-full p-2.5 border-2 border-gray-200 rounded-xl outline-none focus:border-violet-400 bg-white"
+                          >
+                            <option value="">Select Reviewer...</option>
+                            {financeAdminUsers?.map(u => <option key={u.id} value={u.name}>{u.name}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-xs font-medium text-gray-600 mb-1.5 block">Date Reviewed</label>
+                          <input
+                            type="date"
+                            value={billingEditForm.date_reviewed}
+                            onChange={ev => setBillingEditForm({ ...billingEditForm, date_reviewed: ev.target.value })}
+                            className="w-full p-2.5 border-2 border-gray-200 rounded-xl outline-none focus:border-violet-400 bg-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs font-medium text-gray-600 mb-1.5 block">Paid</label>
+                          <select
+                            value={billingEditForm.paid === true ? 'Yes' : billingEditForm.paid === false ? 'No' : ''}
+                            onChange={ev => setBillingEditForm({ ...billingEditForm, paid: ev.target.value === 'Yes' ? true : ev.target.value === 'No' ? false : null })}
+                            className="w-full p-2.5 border-2 border-gray-200 rounded-xl outline-none focus:border-violet-400 bg-white"
+                          >
+                            <option value="">Select...</option>
+                            <option value="Yes">Yes</option>
+                            <option value="No">No</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={handleBillsPaymentSave}
+                          className="flex-1 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl font-medium hover:shadow-lg transition-all"
+                        >
+                          Save Review
+                        </button>
+                        <button
+                          onClick={() => setIsEditing(false)}
+                          className="px-4 py-2.5 bg-gray-200 rounded-xl font-medium hover:bg-gray-300 transition-all"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -876,7 +980,7 @@ const [analyticsModule, setAnalyticsModule] = useState('daily-recon');
   const [forms, setForms] = useState({
     'daily-recon': { recon_date: today, cash: '', credit_card: '', checks_otc: '', insurance_checks: '', care_credit: '', vcc: '', efts: '', deposit_cash: '', deposit_credit_card: '', deposit_checks: '', deposit_insurance: '', deposit_care_credit: '', deposit_vcc: '', deposit_efts: '', notes: '', entered_by: '' },
     'billing-inquiry': { patient_name: '', chart_number: '', parent_name: '', date_of_request: today, inquiry_type: '', description: '', amount_in_question: '', best_contact_method: '', best_contact_time: '', billing_team_reviewed: '', date_reviewed: '', status: 'Pending', result: '' },
-    'bills-payment': { bill_status: 'Pending', bill_date: today, vendor: '', description: '', amount: '', due_date: '', manager_initials: '', ap_reviewed: '', date_reviewed: '', paid: '' },
+'bills-payment': { bill_date: today, vendor: '', description: '', amount: '', due_date: '' },
     'order-requests': { date_entered: today, vendor: '', invoice_number: '', invoice_date: '', due_date: '', amount: '', entered_by: '', notes: '' },
     'refund-requests': { patient_name: '', chart_number: '', parent_name: '', rp_address: '', date_of_request: today, type: '', description: '', amount_requested: '', best_contact_method: '', eassist_audited: '', status: 'Pending' },
    'it-requests': { date_reported: today, urgency: '', requester_name: '', device_system: '', description_of_issue: '', best_contact_method: '', best_contact_time: '', assigned_to: '', status: 'Open', resolution_notes: '', completed_by: '' }
@@ -1855,16 +1959,12 @@ if (moduleId === 'daily-recon') {
 } else if (moduleId === 'bills-payment') {
   entryData = {
     ...entryData,
-    bill_status: form.bill_status || 'Pending',
     bill_date: form.bill_date,
     vendor: form.vendor,
     description: form.description,
     amount: parseFloat(form.amount) || 0,
     due_date: form.due_date || null,
-    manager_initials: form.manager_initials,
-    ap_reviewed: form.ap_reviewed,
-    date_reviewed: form.date_reviewed || null,
-    paid: form.paid
+    status: 'Pending'
   };
 } else if (moduleId === 'order-requests') {
   entryData = {
@@ -2028,6 +2128,32 @@ const updateBillingInquiry = async (entryId, formData) => {
 
   showMessage('success', '✓ Billing inquiry updated!');
   loadModuleData('billing-inquiry');
+};
+
+const updateBillsPayment = async (entryId, formData) => {
+  const confirmed = await showConfirm('Update Bills Payment', 'Are you sure you want to update this payment record?', 'Update', 'violet');
+  if (!confirmed) return;
+
+  const updateData = {
+    status: formData.status,
+    ap_reviewed: formData.billing_team_reviewed || null,
+    date_reviewed: formData.date_reviewed || null,
+    paid: formData.paid,
+    updated_by: currentUser.id
+  };
+
+  const { error } = await supabase
+    .from('bills_payment')
+    .update(updateData)
+    .eq('id', entryId);
+
+  if (error) {
+    showMessage('error', 'Failed to update bills payment');
+    return;
+  }
+
+  showMessage('success', '✓ Bills payment updated!');
+  loadModuleData('bills-payment');
 };
   
 const updateEntryStatus = async (moduleId, entryId, newStatus, additionalFields = {}) => {
@@ -2407,15 +2533,13 @@ const getTotalPages = () => {
       best_contact_method: entry.best_contact_method || '',
       best_contact_time: entry.best_contact_time || ''
     });
-  } else if (activeModule === 'bills-payment') {
+} else if (activeModule === 'bills-payment') {
     setStaffEditForm({
-      bill_status: entry.bill_status || 'Pending',
       bill_date: entry.bill_date || '',
       vendor: entry.vendor || '',
       description: entry.description || '',
       amount: entry.amount || '',
-      due_date: entry.due_date || '',
-      manager_initials: entry.manager_initials || ''
+      due_date: entry.due_date || ''
     });
   } else if (activeModule === 'order-requests') {
     setStaffEditForm({
@@ -2489,15 +2613,13 @@ if (!confirmed) return;;
       best_contact_method: staffEditForm.best_contact_method || null,
       best_contact_time: staffEditForm.best_contact_time
     };
-  } else if (activeModule === 'bills-payment') {
+} else if (activeModule === 'bills-payment') {
     updateData = { ...updateData,
-      bill_status: staffEditForm.bill_status || 'Pending',
       bill_date: staffEditForm.bill_date,
       vendor: staffEditForm.vendor,
       description: staffEditForm.description,
       amount: parseFloat(staffEditForm.amount) || 0,
-      due_date: staffEditForm.due_date || null,
-      manager_initials: staffEditForm.manager_initials
+      due_date: staffEditForm.due_date || null
     };
   } else if (activeModule === 'order-requests') {
     updateData = { ...updateData,
@@ -2810,6 +2932,10 @@ return (
   }}
   onUpdateBillingInquiry={async (entryId, formData) => {
     await updateBillingInquiry(entryId, formData);
+    setViewingEntry(null);
+  }}
+  onUpdateBillsPayment={async (entryId, formData) => {
+    await updateBillsPayment(entryId, formData);
     setViewingEntry(null);
   }}
   onDelete={async (recordId) => {
@@ -4803,15 +4929,10 @@ if (activeModule === 'it-requests') {
     <div className={`bg-white rounded-2xl shadow-lg p-6 border-l-4 ${currentColors?.accent}`}>
       <h2 className="font-semibold mb-4 text-gray-800">Bills Payment Log</h2>
       <div className="grid grid-cols-2 gap-4">
-        <InputField label="Bill Status" value={forms['bills-payment'].bill_status} onChange={e => updateForm('bills-payment', 'bill_status', e.target.value)} options={['Pending', 'Approved', 'Paid']} />
-        <InputField label="Date" type="date" value={forms['bills-payment'].bill_date} onChange={e => updateForm('bills-payment', 'bill_date', e.target.value)} />
+        <InputField label="Bill Date" type="date" value={forms['bills-payment'].bill_date} onChange={e => updateForm('bills-payment', 'bill_date', e.target.value)} />
         <InputField label="Vendor" value={forms['bills-payment'].vendor} onChange={e => updateForm('bills-payment', 'vendor', e.target.value)} />
         <InputField label="Amount" prefix="$" value={forms['bills-payment'].amount} onChange={e => updateForm('bills-payment', 'amount', e.target.value)} />
         <InputField label="Due Date" type="date" value={forms['bills-payment'].due_date} onChange={e => updateForm('bills-payment', 'due_date', e.target.value)} />
-        <InputField label="Manager Initials" value={forms['bills-payment'].manager_initials} onChange={e => updateForm('bills-payment', 'manager_initials', e.target.value)} />
-        <InputField label="Accounts Payable Reviewed" value={forms['bills-payment'].ap_reviewed} onChange={e => updateForm('bills-payment', 'ap_reviewed', e.target.value)} options={['Yes', 'No']} />
-        <InputField label="Date Reviewed" type="date" value={forms['bills-payment'].date_reviewed} onChange={e => updateForm('bills-payment', 'date_reviewed', e.target.value)} />
-        <InputField label="Paid (Y/N)" value={forms['bills-payment'].paid} onChange={e => updateForm('bills-payment', 'paid', e.target.value)} options={['Yes', 'No']} />
       </div>
       <div className="mt-4">
         <InputField label="Description (Bill Details)" large value={forms['bills-payment'].description} onChange={e => updateForm('bills-payment', 'description', e.target.value)} />
@@ -5023,14 +5144,12 @@ if (activeModule === 'it-requests') {
                       </div>
                     )}
                     
-                    {activeModule === 'bills-payment' && (
+{activeModule === 'bills-payment' && (
                       <div className="grid grid-cols-2 gap-3">
-                        <InputField label="Bill Status" value={staffEditForm.bill_status} onChange={ev => updateStaffEditForm('bill_status', ev.target.value)} options={['Pending', 'Approved', 'Paid']} />
-                        <InputField label="Date" type="date" value={staffEditForm.bill_date} onChange={ev => updateStaffEditForm('bill_date', ev.target.value)} />
+                        <InputField label="Bill Date" type="date" value={staffEditForm.bill_date} onChange={ev => updateStaffEditForm('bill_date', ev.target.value)} />
                         <InputField label="Vendor" value={staffEditForm.vendor} onChange={ev => updateStaffEditForm('vendor', ev.target.value)} />
                         <InputField label="Amount" prefix="$" value={staffEditForm.amount} onChange={ev => updateStaffEditForm('amount', ev.target.value)} />
                         <InputField label="Due Date" type="date" value={staffEditForm.due_date} onChange={ev => updateStaffEditForm('due_date', ev.target.value)} />
-                        <InputField label="Manager Initials" value={staffEditForm.manager_initials} onChange={ev => updateStaffEditForm('manager_initials', ev.target.value)} />
                         <div className="col-span-2">
                           <InputField label="Description" large value={staffEditForm.description} onChange={ev => updateStaffEditForm('description', ev.target.value)} />
                         </div>
