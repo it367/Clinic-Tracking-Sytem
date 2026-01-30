@@ -1,7 +1,7 @@
 import './globals.css'
 export const metadata = {
-  title: 'Clinic Daily Recon',
-  description: 'Daily reconciliation system for clinics',
+  title: 'CMS - KidShine Hawaii',
+  description: 'Clinic Management Portal',
 }
 export default function RootLayout({ children }) {
   return (
